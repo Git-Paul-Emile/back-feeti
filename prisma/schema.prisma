@@ -1,0 +1,1041 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EventType {
+  PRESENTIEL
+  STREAMING_LIVE
+  MIXTE
+}
+
+enum DeliveryMethod {
+  email
+  physical
+}
+
+enum DeliveryStatus {
+  pending
+  processing
+  shipped
+  delivered
+  failed
+}
+
+enum Role {
+  user
+  organizer
+  controller
+  moderator
+  admin
+  super_admin
+}
+
+model User {
+  id           String         @id @default(cuid())
+  name         String
+  email        String         @unique
+  phone        String?
+  passwordHash String
+  role         Role           @default(user)
+  interests    String         @default("[]") // JSON array of event category slugs
+  firebaseUid  String?        @unique // UID Firebase Auth (pour connexion Firebase)
+  photoUrl     String?        // URL de la photo de profil (Firebase ou autre)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  events              Event[]
+  tickets             Ticket[]
+  favorites           UserFavorite[]
+  deals               Deal[]
+  leisureItems        LeisureItem[]
+  leisureFavorites    LeisureFavorite[]
+  blogPosts           BlogPost[]
+  featuredRequests    FeaturedRequest[]
+  // Contrôleurs : événements assignés & billets scannés
+  assignedEvents      EventController[]
+  scannedTickets      Ticket[]          @relation("ScannedBy")
+  // Finance
+  wallet              Wallet?           @relation("OrganizerWallet")
+  organizerTransactions Transaction[]   @relation("OrganizerTransactions")
+  buyerTransactions   Transaction[]     @relation("BuyerTransactions")
+  organizerPayouts    Payout[]          @relation("OrganizerPayouts")
+  approvedPayouts     Payout[]          @relation("PayoutApprovedBy")
+  processedPayouts    Payout[]          @relation("PayoutProcessedBy")
+  // Fidélité
+  loyaltyProfile      LoyaltyProfile?
+}
+
+model UserFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  eventId   String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event     Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, eventId])
+}
+
+model Event {
+  id           String   @id @default(cuid())
+  title        String
+  description  String
+  date         String
+  time         String
+  location     String
+  image        String   @default("")
+  price        Float    @default(0)
+  vipPrice     Float?
+  ticketTypes  String?
+  currency     String   @default("FCFA")
+  category     String
+  maxAttendees Int
+  attendees    Int      @default(0)
+  duration     String?
+  salesBlocked Boolean   @default(false)
+  isLive       Boolean   @default(false)
+  eventType    EventType @default(PRESENTIEL)
+  isFeatured   Boolean  @default(false)
+  isFavorite   Boolean  @default(false)
+  streamUrl    String?
+  videoUrl     String?
+  status       String   @default("draft")
+  countryCode  String?
+  country      Country?          @relation(fields: [countryCode], references: [code])
+  organizerId  String
+  organizer    User              @relation(fields: [organizerId], references: [id])
+  tickets      Ticket[]
+  favoritedBy  UserFavorite[]
+  featuredRequests FeaturedRequest[]
+  controllers  EventController[]
+  transactions Transaction[]
+  // Feeti Access
+  eventZones          EventZone[]
+  participantCategories ParticipantCategory[]
+  accessBadges        AccessBadge[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  // Système de mise en avant par pack promotionnel
+  promotionType      String?   // OR | ARGENT | BRONZE | LITE
+  promotionStatus    String?   @default("inactive") // active | inactive | expired
+  promotionStartDate DateTime?
+  promotionEndDate   DateTime?
+}
+
+// Demande de formulaires PDF pour événements en live/mixte
+model LiveEventConsentRequest {
+  id             String    @id @default(cuid())
+  organizerEmail String
+  eventName      String
+  eventType      String    // STREAMING_LIVE | MIXTE
+  consentGiven   Boolean   @default(false)
+  pdfRequestedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+enum FeaturedRequestStatus {
+  pending
+  approved
+  rejected
+}
+
+model FeaturedRequest {
+  id          String                @id @default(cuid())
+  eventId     String
+  event       Event                 @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organizerId String
+  organizer   User                  @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  status      FeaturedRequestStatus @default(pending)
+  message     String?               // message de l'organisateur
+  adminNote   String?               // note de réponse de l'admin
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+}
+
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  icon      String?
+  createdAt DateTime @default(now())
+}
+
+model Country {
+  id        String   @id @default(cuid())
+  code      String   @unique  // ISO 3166-1 alpha-2 (ex: CG, CD, GA)
+  name      String
+  flag      String   @default("")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  events        Event[]
+  deals         Deal[]
+  leisureItems  LeisureItem[]
+  cities        City[]
+  deliveryZones DeliveryZone[]
+}
+
+// Zone de livraison nationale (ex: Gabon - Zone 1, Gabon - Zone 2)
+model DeliveryZone {
+  id          String   @id @default(cuid())
+  name        String              // ex: "Zone 1", "Zone 2"
+  countryCode String
+  country     Country  @relation(fields: [countryCode], references: [code])
+  fee         Float               // frais de livraison standard pour cette zone
+  currency    String   @default("FCFA")
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  cities           City[]
+  deliveryAddresses DeliveryAddress[]
+
+  @@unique([name, countryCode])   // Zone 1 du Gabon ≠ Zone 1 du Congo
+}
+
+// Ville / commune liée à un pays et une zone de livraison
+model City {
+  id          String       @id @default(cuid())
+  name        String
+  countryCode String
+  country     Country      @relation(fields: [countryCode], references: [code])
+  zoneId      String
+  zone        DeliveryZone @relation(fields: [zoneId], references: [id])
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+
+  @@unique([name, countryCode])
+}
+
+model DealCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  icon      String?
+  createdAt DateTime @default(now())
+}
+
+model Deal {
+  id                String   @id @default(cuid())
+  title             String
+  description       String
+  category          String   // weekly | general | feeti-na-feeti | restaurants | hotels | activities | shopping
+  originalPrice     Float
+  discountedPrice   Float
+  discount          Int      // pourcentage de réduction
+  validUntil        String   // date ISO (YYYY-MM-DD)
+  location          String
+  image             String   @default("")
+  isPopular         Boolean  @default(false)
+  merchantName      String
+  tags              String   @default("[]") // tableau JSON sérialisé
+  availableQuantity Int?
+  maxQuantity       Int?
+  rating            Float?
+  reviewCount       Int?
+  contactPhone      String?  // téléphone / WhatsApp
+  contactEmail      String?  // email de contact
+  contactWebsite    String?  // site web
+  status            String   @default("published") // draft | published
+  countryCode       String?
+  country           Country? @relation(fields: [countryCode], references: [code])
+  createdById       String
+  createdBy         User     @relation(fields: [createdById], references: [id])
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model LeisureCategory {
+  id        String        @id @default(cuid())
+  name      String        @unique
+  slug      String        @unique
+  createdAt DateTime      @default(now())
+  items     LeisureItem[]
+}
+
+model LeisureItem {
+  id           String            @id @default(cuid())
+  name         String
+  description  String
+  categorySlug String
+  category     LeisureCategory   @relation(fields: [categorySlug], references: [slug])
+  location     String
+  address      String?
+  phone        String?
+  website      String?
+  priceRange   String?
+  openingHours String?
+  image        String            @default("")
+  rating       Float?
+  reviewCount  Int?
+  features     String            @default("[]")
+  tags         String            @default("[]")
+  status       String            @default("published")
+  latitude     Float?
+  longitude    Float?
+  countryCode  String?
+  country      Country?          @relation(fields: [countryCode], references: [code])
+  isFeatured   Boolean           @default(false)
+  createdById  String
+  createdBy    User              @relation(fields: [createdById], references: [id])
+  favoritedBy  LeisureFavorite[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  // Abonnement annuaire : BASIC | PRO | PREMIUM
+  leisureOfferType    String?   // BASIC | PRO | PREMIUM
+  // Pack visibilité ponctuel : VISIBILITE_ACCUEIL | BOOST | CAMPAGNE_PREMIUM
+  leisurePackType     String?   // VISIBILITE_ACCUEIL | BOOST | CAMPAGNE_PREMIUM
+  leisurePackStatus   String?   @default("inactive") // active | inactive | expired
+  leisurePackStartDate DateTime?
+  leisurePackEndDate   DateTime?
+}
+
+model LeisureFavorite {
+  id            String      @id @default(cuid())
+  userId        String
+  leisureItemId String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  leisureItem   LeisureItem @relation(fields: [leisureItemId], references: [id], onDelete: Cascade)
+  createdAt     DateTime    @default(now())
+
+  @@unique([userId, leisureItemId])
+}
+
+model Ticket {
+  id               String          @id @default(cuid())
+  eventId          String
+  event            Event           @relation(fields: [eventId], references: [id])
+  userId           String
+  user             User            @relation(fields: [userId], references: [id])
+  category         String          @default("standard")
+  price            Float
+  currency         String          @default("FCFA")
+  holderName       String
+  holderEmail      String
+  qrData           String
+  status           String          @default("valid")
+  orderId          String
+  usedAt           DateTime?
+  scannedById      String?
+  scannedBy        User?           @relation("ScannedBy", fields: [scannedById], references: [id])
+  // Livraison
+  deliveryMethod   DeliveryMethod  @default(email)
+  deliveryStatus   DeliveryStatus?
+  deliveryAddress  DeliveryAddress?
+  transaction      Transaction?
+  // Feeti Access
+  accessBadge      AccessBadge?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+}
+
+// Adresse de livraison physique pour un billet
+model DeliveryAddress {
+  id             String   @id @default(cuid())
+  ticketId       String   @unique
+  ticket         Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  recipientName  String
+  recipientPhone String
+  zoneId         String
+  zone           DeliveryZone @relation(fields: [zoneId], references: [id])
+  additionalInfo String?
+  deliveryFee    Float    // frais au moment de la commande (snapshot de la zone)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// Jonction : contrôleur affecté à un événement par l'organisateur
+model EventController {
+  id           String   @id @default(cuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  controllerId String
+  controller   User     @relation(fields: [controllerId], references: [id], onDelete: Cascade)
+  assignedAt   DateTime @default(now())
+
+  @@unique([eventId, controllerId])
+}
+
+model BlogCategory {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  slug      String     @unique
+  icon      String?
+  createdAt DateTime   @default(now())
+  posts     BlogPost[]
+}
+
+model BlogPost {
+  id            String       @id @default(cuid())
+  title         String
+  slug          String       @unique
+  excerpt       String
+  content       String
+  featuredImage String       @default("")
+  categorySlug  String
+  category      BlogCategory @relation(fields: [categorySlug], references: [slug])
+  tags          String       @default("[]")
+  status        String       @default("draft")
+  isFeatured    Boolean      @default(false)
+  views         Int          @default(0)
+  comments      Int          @default(0)
+  readTime      Int          @default(5)
+  authorId      String
+  author        User         @relation(fields: [authorId], references: [id])
+  publishDate   DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SYSTÈME FINANCIER — Transactions, Wallets, Payouts, Audit
+// ═══════════════════════════════════════════════════════════════════════
+
+enum TransactionStatus {
+  pending
+  processing
+  paid
+  completed
+  failed
+  refunded
+  partially_refunded
+  disputed
+  cancelled
+}
+
+enum PayoutStatus {
+  initiated
+  approved
+  processing
+  completed
+  failed
+  reversed
+}
+
+enum LedgerEntryType {
+  credit
+  debit
+}
+
+enum LedgerOperationType {
+  ticket_purchase      // Gain issu d'une vente
+  refund               // Remboursement déduit
+  payout               // Versement à l'organisateur
+  dispute_hold         // Blocage pour litige
+  dispute_release      // Libération après litige
+  adjustment           // Ajustement manuel admin
+}
+
+// ─── Transaction financière ──────────────────────────────────────────
+model Transaction {
+  id                           String            @id @default(uuid())
+  idempotencyKey               String            @unique
+  eventId                      String
+  event                        Event             @relation(fields: [eventId], references: [id])
+  organizerId                  String
+  organizer                    User              @relation("OrganizerTransactions", fields: [organizerId], references: [id])
+  buyerId                      String
+  buyer                        User              @relation("BuyerTransactions", fields: [buyerId], references: [id])
+  ticketId                     String            @unique
+  ticket                       Ticket            @relation(fields: [ticketId], references: [id])
+  // Montants en centimes (entiers) — immuables après création
+  montantTTC                   Int
+  montantHT                    Int
+  tva                          Int
+  commission                   Int
+  netOrganisateur              Int
+  devise                       String            @default("XOF")
+  // Taux snapshot (en basis points : 1800 = 18.00%)
+  tauxTVA                      Int
+  tauxCommission               Int
+  // État et paiement
+  status                       TransactionStatus @default(pending)
+  paymentMethod                String?
+  paymentProviderTransactionId String?
+  metadata                     Json?
+  // Remboursement
+  refundAmount                 Int?
+  refundReason                 String?
+  // Intégrité
+  checksum                     String
+  // Horodatage
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
+  completedAt                  DateTime?
+  // Relations
+  statusHistory                TransactionStatusHistory[]
+  payoutTransactions           PayoutTransaction[]
+
+  @@index([organizerId])
+  @@index([buyerId])
+  @@index([eventId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Journal des transitions d'état (Event Sourcing)
+model TransactionStatusHistory {
+  id            String             @id @default(uuid())
+  transactionId String
+  transaction   Transaction        @relation(fields: [transactionId], references: [id])
+  fromStatus    TransactionStatus?
+  toStatus      TransactionStatus
+  reason        String?
+  actorId       String?
+  actorRole     String?
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+
+  @@index([transactionId])
+}
+
+// ─── Wallet organisateur ─────────────────────────────────────────────
+model Wallet {
+  id                String         @id @default(uuid())
+  organizerId       String         @unique
+  organizer         User           @relation("OrganizerWallet", fields: [organizerId], references: [id])
+  // Soldes en centimes
+  soldeTotal        Int            @default(0) // cumul historique gains nets
+  soldeDisponible   Int            @default(0) // gains validés non versés
+  soldeEnAttente    Int            @default(0) // transactions pending/processing
+  soldeRetirable    Int            @default(0) // après réserves/blocages
+  totalRetire       Int            @default(0) // cumul payouts effectués
+  totalEnLitige     Int            @default(0) // bloqué pour litiges
+  devise            String         @default("XOF")
+  version           Int            @default(0) // verrouillage optimiste
+  checksum          String         @default("")
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  ledgerEntries     WalletLedger[]
+  payouts           Payout[]
+}
+
+// Grand livre comptable en partie double
+model WalletLedger {
+  id            String              @id @default(uuid())
+  walletId      String
+  wallet        Wallet              @relation(fields: [walletId], references: [id])
+  entryType     LedgerEntryType
+  operationType LedgerOperationType
+  amount        Int                 // en centimes, toujours positif
+  balanceBefore Int                 // solde disponible avant
+  balanceAfter  Int                 // solde disponible après
+  description   String
+  referenceId   String?             // ID transaction ou payout
+  referenceType String?             // "transaction" | "payout" | "adjustment"
+  actorId       String?
+  metadata      Json?
+  checksum      String
+  createdAt     DateTime            @default(now())
+
+  @@index([walletId])
+  @@index([referenceId])
+  @@index([createdAt])
+}
+
+// ─── Payout (versement organisateur) ────────────────────────────────
+model Payout {
+  id                String              @id @default(uuid())
+  organizerId       String
+  organizer         User                @relation("OrganizerPayouts", fields: [organizerId], references: [id])
+  walletId          String
+  wallet            Wallet              @relation(fields: [walletId], references: [id])
+  montant           Int                 // en centimes
+  devise            String              @default("XOF")
+  methodePaiement   String
+  referenceBancaire String?
+  statut            PayoutStatus        @default(initiated)
+  approvedById      String?
+  approvedBy        User?               @relation("PayoutApprovedBy", fields: [approvedById], references: [id])
+  processedById     String?
+  processedBy       User?               @relation("PayoutProcessedBy", fields: [processedById], references: [id])
+  notes             String?
+  attachments       String?             // JSON array d'URLs
+  initiatedAt       DateTime            @default(now())
+  approvedAt        DateTime?
+  processedAt       DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  transactions      PayoutTransaction[]
+  statusHistory     PayoutStatusHistory[]
+
+  @@index([organizerId])
+  @@index([statut])
+}
+
+// Association Payout ↔ Transactions couvertes
+model PayoutTransaction {
+  id            String      @id @default(uuid())
+  payoutId      String
+  payout        Payout      @relation(fields: [payoutId], references: [id])
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id])
+  createdAt     DateTime    @default(now())
+
+  @@unique([payoutId, transactionId])
+}
+
+// Journal des transitions de statut payout
+model PayoutStatusHistory {
+  id         String        @id @default(uuid())
+  payoutId   String
+  payout     Payout        @relation(fields: [payoutId], references: [id])
+  fromStatus PayoutStatus?
+  toStatus   PayoutStatus
+  reason     String?
+  actorId    String?
+  actorRole  String?
+  createdAt  DateTime      @default(now())
+
+  @@index([payoutId])
+}
+
+// ─── Journal d'audit immuable (append-only) ──────────────────────────
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  userRole   String
+  action     String   // ex: "TRANSACTION_STATUS_CHANGE", "PAYOUT_APPROVED"
+  resource   String   // ex: "Transaction", "Payout", "Wallet"
+  resourceId String?
+  ipAddress  String?
+  userAgent  String?
+  dataBefore Json?
+  dataAfter  Json?
+  metadata   Json?
+  checksum   String   // intégrité de l'entrée
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
+  @@index([action])
+}
+
+// ─── Clé d'idempotence (anti-doublon) ────────────────────────────────
+model IdempotencyKey {
+  key        String   @id
+  resource   String   // "transaction", "payout"
+  resourceId String?
+  response   Json?
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@index([expiresAt])
+}
+
+// ─── Paramètres plateforme (clé-valeur) ──────────────────────────────
+model PlatformSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  FEETI NA FEETI — Système de fidélité & récompenses
+// ═══════════════════════════════════════════════════════════════════════
+
+enum LoyaltyLevel {
+  Mobembo
+  Elengi
+  Momi
+  Mwana
+  Boboto
+}
+
+enum PointsActionType {
+  ticket_purchase
+  event_attendance
+  event_share
+  referral_signup
+  referral_first_event
+  mission_complete
+  manual_adjustment
+  reward_redemption
+  partner_spending
+  community_post
+  community_engagement
+  ambassador_bonus
+  activity_bonus
+}
+
+// Profil de fidélité d'un utilisateur
+model LoyaltyProfile {
+  id              String       @id @default(cuid())
+  userId          String       @unique
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  points          Int          @default(0)       // points disponibles
+  pointsEarned    Int          @default(0)       // total gagné depuis toujours
+  pointsSpent     Int          @default(0)       // total dépensé
+  level           LoyaltyLevel @default(Mobembo)
+  eventsAttended  Int          @default(0)
+  totalSpent      Int          @default(0)       // FCFA total dépensé sur billets
+  referralCode    String       @unique           // code de parrainage unique
+  referredById    String?
+  referredBy      LoyaltyProfile?  @relation("LoyaltyReferral", fields: [referredById], references: [id])
+  referrals       LoyaltyProfile[] @relation("LoyaltyReferral")
+  referralSignupBonusPaid     Boolean @default(false)
+  referralFirstEventBonusPaid Boolean @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  pointsLedger    PointsLedger[]
+  redemptions     LoyaltyRedemption[]
+  missionProgress MissionProgress[]
+}
+
+// Grand livre de tous les mouvements de points
+model PointsLedger {
+  id            String           @id @default(cuid())
+  profileId     String
+  profile       LoyaltyProfile   @relation(fields: [profileId], references: [id])
+  action        PointsActionType
+  points        Int              // positif = gain, négatif = dépense
+  balanceBefore Int
+  balanceAfter  Int
+  description   String
+  referenceId   String?          // ticketId, eventId, etc.
+  referenceType String?          // "ticket" | "event" | "referral" | "mission" | "reward"
+  createdAt     DateTime         @default(now())
+
+  @@index([profileId])
+  @@index([createdAt])
+}
+
+// Catalogue des récompenses
+model LoyaltyReward {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  points      Int                      // coût en points
+  category    String                   // Billets | VIP | Restaurants | Expériences | Partenaires
+  image       String   @default("")
+  stock       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  redemptions LoyaltyRedemption[]
+}
+
+// Échanges de récompenses
+model LoyaltyRedemption {
+  id        String         @id @default(cuid())
+  profileId String
+  profile   LoyaltyProfile @relation(fields: [profileId], references: [id])
+  rewardId  String
+  reward    LoyaltyReward  @relation(fields: [rewardId], references: [id])
+  points    Int            // points déduits (snapshot)
+  status    String         @default("pending") // pending | confirmed | cancelled
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([profileId])
+}
+
+// Catalogue des missions
+model LoyaltyMission {
+  id          String           @id @default(cuid())
+  title       String
+  description String
+  points      Int
+  actionType  PointsActionType
+  target      Int              // ex: 3 pour "participer à 3 événements"
+  isActive    Boolean          @default(true)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  progress    MissionProgress[]
+}
+
+// Progression des utilisateurs sur les missions
+model MissionProgress {
+  id        String         @id @default(cuid())
+  profileId String
+  profile   LoyaltyProfile @relation(fields: [profileId], references: [id])
+  missionId String
+  mission   LoyaltyMission @relation(fields: [missionId], references: [id])
+  progress  Int            @default(0)
+  completed Boolean        @default(false)
+  rewardPaid Boolean       @default(false)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@unique([profileId, missionId])
+}
+
+// Partenaires du programme
+model LoyaltyPartner {
+  id              String   @id @default(cuid())
+  name            String
+  description     String   @default("")
+  category        String   // Restaurant | Bar & Club | Hôtel | Bien-être | Boutique | Loisirs
+  discount        String   // ex: "10%" (réduction par défaut / Mobembo)
+  discountByLevel Json     @default("{}") // {"Mobembo":"5%","Elengi":"10%","Momi":"20%","Mwana":"30%","Boboto":"40%"}
+  bonusPoints     Int      @default(0)   // bonus pts par 1000 FCFA dépensés
+  logo            String   @default("")
+  address         String   @default("")
+  phone           String   @default("")
+  website         String   @default("")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  spendings       PartnerSpending[]
+}
+
+// Anti-fraude : compteur journalier de partages
+model DailyShareRecord {
+  id      String   @id @default(cuid())
+  userId  String
+  date    String   // YYYY-MM-DD
+  count   Int      @default(0)
+
+  @@unique([userId, date])
+}
+
+// ─── Dépenses chez un partenaire marchand ────────────────────────────────────
+model PartnerSpending {
+  id           String         @id @default(cuid())
+  userId       String
+  partnerId    String
+  partner      LoyaltyPartner @relation(fields: [partnerId], references: [id])
+  amountFCFA   Int
+  pointsEarned Int            @default(0)
+  description  String         @default("")
+  createdAt    DateTime       @default(now())
+
+  @@index([userId])
+  @@index([partnerId])
+}
+
+// ─── Publications communauté ─────────────────────────────────────────────────
+model CommunityPost {
+  id            String                @id @default(cuid())
+  authorId      String
+  title         String
+  content       String
+  image         String                @default("")
+  eventId       String?
+  likesCount    Int                   @default(0)
+  commentsCount Int                   @default(0)
+  status        String                @default("pending") // pending | approved | rejected
+  isFeatured    Boolean               @default(false)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  engagements   CommunityEngagement[]
+
+  @@index([authorId])
+  @@index([status])
+}
+
+// ─── Engagement communautaire (likes / commentaires) ─────────────────────────
+model CommunityEngagement {
+  id        String        @id @default(cuid())
+  userId    String
+  postId    String
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  type      String        // "like" | "comment"
+  content   String        @default("")
+  createdAt DateTime      @default(now())
+
+  @@unique([userId, postId, type])
+  @@index([postId])
+}
+
+// ─── Badges ambassadeur "Feeteurs" ───────────────────────────────────────────
+model AmbassadorBadge {
+  id          String   @id @default(cuid())
+  userId      String
+  badgeType   String   // "content_creator" | "event_champion" | "community_star" | "referral_master" | "super_fan"
+  title       String
+  description String
+  earnedAt    DateTime @default(now())
+
+  @@unique([userId, badgeType])
+  @@index([userId])
+}
+
+// ─── Bonus / campagnes de multiplicateurs ────────────────────────────────────
+model LoyaltyBonus {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  bonusType   String   // "multiplier" | "flat_bonus" | "activity_bonus" | "social_bonus"
+  value       Float    // multiplicateur (ex: 1.5) ou points fixes
+  actionType  String?  // type d'action concerné, null = tous
+  minLevel    String?  // niveau minimum requis, null = tous
+  conditions  Json     @default("{}")
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  FEETI ACCESS — Contrôle d'accès & Gestion des zones
+// ═══════════════════════════════════════════════════════════════════════
+
+enum ZoneAccessLevel {
+  OUI    // accès accordé
+  NON    // accès refusé
+  COND   // accès conditionnel
+}
+
+enum BadgeStatus {
+  active
+  revoked
+  expired
+}
+
+enum AccessResult {
+  granted
+  denied
+  conditional
+}
+
+// Zone d'accès configurée pour un événement (basée sur 10 templates prédéfinis)
+model EventZone {
+  id           String   @id @default(cuid())
+  eventId      String
+  event        Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  code         String   // Z1 … Z10
+  name         String
+  description  String?
+  color        String   @default("#3B82F6")
+  isActive     Boolean  @default(true)
+  maxCapacity  Int?
+  currentCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  accessRights ZoneAccessRight[]
+  accessLogs   AccessLog[]
+
+  @@unique([eventId, code])
+  @@index([eventId])
+}
+
+// Catégorie de participants pour un événement
+model ParticipantCategory {
+  id          String   @id @default(cuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  color       String   @default("#6B7280")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  accessRights ZoneAccessRight[]
+  badges       AccessBadge[]
+
+  @@unique([eventId, name])
+  @@index([eventId])
+}
+
+// Matrice droits d'accès : catégorie ↔ zone
+model ZoneAccessRight {
+  id          String              @id @default(cuid())
+  categoryId  String
+  category    ParticipantCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  zoneId      String
+  zone        EventZone           @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  accessLevel ZoneAccessLevel     @default(NON)
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  @@unique([categoryId, zoneId])
+  @@index([zoneId])
+}
+
+// Badge QR par participant (lié à un ticket ou créé indépendamment)
+model AccessBadge {
+  id           String              @id @default(cuid())
+  eventId      String
+  event        Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketId     String?             @unique
+  ticket       Ticket?             @relation(fields: [ticketId], references: [id])
+  categoryId   String
+  category     ParticipantCategory @relation(fields: [categoryId], references: [id])
+  holderName   String
+  holderEmail  String
+  holderPhone  String?
+  holderPhoto  String?
+  qrCode       String              @unique
+  qrSecret     String
+  status       BadgeStatus         @default(active)
+  sentAt       DateTime?
+  revokedAt    DateTime?
+  revokedById  String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+
+  accessLogs     AccessLog[]
+  suspectReports SuspectBadgeReport[]
+
+  @@index([eventId])
+  @@index([status])
+}
+
+// Journal de chaque tentative de scan
+model AccessLog {
+  id            String       @id @default(cuid())
+  badgeId       String
+  badge         AccessBadge  @relation(fields: [badgeId], references: [id])
+  zoneId        String
+  zone          EventZone    @relation(fields: [zoneId], references: [id])
+  eventId       String
+  scannedById   String
+  result        AccessResult
+  refusalReason String?
+  offlineSync   Boolean      @default(false)
+  scannedAt     DateTime     @default(now())
+
+  @@index([badgeId])
+  @@index([zoneId])
+  @@index([eventId])
+  @@index([scannedAt])
+}
+
+// Signalement de badge suspect par un agent
+model SuspectBadgeReport {
+  id           String      @id @default(cuid())
+  badgeId      String
+  badge        AccessBadge @relation(fields: [badgeId], references: [id])
+  reportedById String
+  reason       String
+  resolved     Boolean     @default(false)
+  createdAt    DateTime    @default(now())
+
+  @@index([badgeId])
+}
+
+// ─── Journal d'accès VIP événements ─────────────────────────────────────────
+model VipAccessLog {
+  id         String   @id @default(cuid())
+  userId     String
+  eventId    String
+  accessType String   // "vip_area" | "backstage" | "private_event"
+  ticketId   String?
+  grantedAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([eventId])
+}

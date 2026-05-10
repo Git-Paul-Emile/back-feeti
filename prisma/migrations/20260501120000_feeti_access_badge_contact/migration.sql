@@ -1,0 +1,2 @@
+ALTER TABLE `AccessBadge` ADD COLUMN `holderPhone` VARCHAR(191) NULL;
+ALTER TABLE `AccessBadge` ADD COLUMN `holderPhoto` VARCHAR(191) NULL;

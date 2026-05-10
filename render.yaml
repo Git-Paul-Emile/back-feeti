@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: feeti-back
+    runtime: node
+    buildCommand: npm install && npm run build && npx prisma generate
+    startCommand: npx prisma migrate deploy && node dist/index.js
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
