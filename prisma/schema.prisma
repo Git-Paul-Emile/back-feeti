@@ -11,6 +11,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = "postgresql://dummy:dummy@localhost:5432/dummy"
 }
 
 enum EventType {
