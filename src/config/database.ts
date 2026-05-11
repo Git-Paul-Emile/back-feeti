@@ -1,4 +1,4 @@
-import { PrismaClient } from "../../src/generated/prisma/client.js";
+import { PrismaClient } from "../generated/prisma/client.js";
 
 function getCollectionName(modelName: string): string {
   const camel = modelName.charAt(0).toLowerCase() + modelName.slice(1);
