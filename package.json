@@ -22,8 +22,6 @@
   "description": "",
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",
-    "@types/bcrypt": "^6.0.0",
-    "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
@@ -38,6 +36,8 @@
   "dependencies": {
     "@google-cloud/dialogflow": "^7.5.0",
     "@prisma/client": "^6.19.2",
+    "@types/bcrypt": "^6.0.0",
+    "@types/cookie-parser": "^1.4.10",
     "@types/multer": "^2.1.0",
     "@types/nodemailer": "^8.0.0",
     "@types/qrcode": "^1.5.6",
