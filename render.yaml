@@ -2,10 +2,48 @@ services:
   - type: web
     name: feeti-back
     runtime: node
-    buildCommand: npm install && npm run build && npx prisma generate
+    buildCommand: npm install && npm run build
     startCommand: npx prisma migrate deploy && node dist/index.js
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: ACCESS_TOKEN_SECRET
+        sync: false
+      - key: REFRESH_TOKEN_SECRET
+        sync: false
+      - key: FRONT_URL
+        sync: false
+      - key: FEETIPLAY_URL
+        sync: false
+      - key: FEETIPLAY_API_URL
+        sync: false
+      - key: FEETI_SYNC_SECRET
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: BCRYPT_SALT
+        value: "10"
+      - key: ACCESS_TOKEN_EXPIRY
+        value: 1d
+      - key: REFRESH_TOKEN_EXPIRY
+        value: 7d
+      - key: FIRESTORE_SYNC_ENABLED
+        value: "true"

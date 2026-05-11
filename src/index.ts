@@ -7,6 +7,14 @@ import { startEmailWorker } from "./queues/email.worker.js";
 
 dotenv.config();
 
+const REQUIRED_ENV_VARS = ["DATABASE_URL", "ACCESS_TOKEN_SECRET", "REFRESH_TOKEN_SECRET"];
+
+const missingVars = REQUIRED_ENV_VARS.filter((v) => !process.env[v]);
+if (missingVars.length > 0) {
+  console.error(`[feeti2-back] Variables d'environnement manquantes : ${missingVars.join(", ")}`);
+  process.exit(1);
+}
+
 const DEFAULT_BACKEND_PORT = 8000;
 
 const initializeApp = async () => {
