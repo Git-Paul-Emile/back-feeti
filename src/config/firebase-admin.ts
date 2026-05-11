@@ -3,14 +3,22 @@ import * as path from "path";
 import * as fs from "fs";
 
 if (!admin.apps.length) {
-  const serviceAccountPath = path.resolve(process.cwd(), "firebase-service-account.json");
+  let serviceAccount: admin.ServiceAccount | null = null;
 
-  if (fs.existsSync(serviceAccountPath)) {
-    const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf-8"));
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) as admin.ServiceAccount;
+  } else {
+    const serviceAccountPath = path.resolve(process.cwd(), "firebase-service-account.json");
+    if (fs.existsSync(serviceAccountPath)) {
+      serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf-8")) as admin.ServiceAccount;
+    }
+  }
+
+  if (serviceAccount) {
     admin.initializeApp({
       credential:    admin.credential.cert(serviceAccount),
-      projectId:     serviceAccount.project_id,
-      storageBucket: `${serviceAccount.project_id}.firebasestorage.app`,
+      projectId:     (serviceAccount as any).project_id,
+      storageBucket: `${(serviceAccount as any).project_id}.firebasestorage.app`,
     });
   } else {
     admin.initializeApp();
