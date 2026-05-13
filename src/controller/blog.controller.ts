@@ -9,6 +9,18 @@ import type { CreateBlogCategoryInput, UpdateBlogCategoryInput, CreateBlogPostIn
 
 const prisma = new PrismaClient();
 
+function parseTags(raw: unknown): string[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return []; }
+  }
+  return [];
+}
+
+function parsePost(post: any) {
+  return { ...post, tags: parseTags(post.tags) };
+}
+
 function slugify(text: string): string {
   return text
     .toLowerCase()
@@ -109,7 +121,7 @@ export const getAllBlogPosts = controllerWrapper(async (req: Request, res: Respo
     jsonResponse({
       status: "success",
       message: "Articles récupérés",
-      data: { posts, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+      data: { posts: posts.map(parsePost), total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     })
   );
 });
@@ -155,7 +167,7 @@ export const getAllBlogPostsAdmin = controllerWrapper(async (req: Request, res: 
     jsonResponse({
       status: "success",
       message: "Articles récupérés",
-      data: { posts, total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
+      data: { posts: posts.map(parsePost), total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) },
     })
   );
 });
@@ -175,7 +187,7 @@ export const getBlogPostById = controllerWrapper(async (req: Request, res: Respo
   await prisma.blogPost.update({ where: { id }, data: { views: { increment: 1 } } });
 
   res.status(StatusCodes.OK).json(
-    jsonResponse({ status: "success", message: "Article récupéré", data: { ...post, views: post.views + 1 } })
+    jsonResponse({ status: "success", message: "Article récupéré", data: parsePost({ ...post, views: post.views + 1 }) })
   );
 });
 
@@ -199,7 +211,7 @@ export const getRelatedBlogPosts = controllerWrapper(async (req: Request, res: R
   });
 
   res.status(StatusCodes.OK).json(
-    jsonResponse({ status: "success", message: "Articles similaires récupérés", data: related })
+    jsonResponse({ status: "success", message: "Articles similaires récupérés", data: related.map(parsePost) })
   );
 });
 
