@@ -27,13 +27,7 @@ import paymentRouter from "../routes/payment.routes.js";
 import accessRouter from "../routes/access.routes.js";
 import chatbotRouter from "../routes/chatbot.routes.js";
 
-
-
-
 const app = express();
-
-
-
 
 const buildLocalhostOrigins = (startPort: number, count: number) =>
   Array.from({ length: count }, (_, index) => `http://localhost:${startPort + index}`);
@@ -41,59 +35,40 @@ const buildLocalhostOrigins = (startPort: number, count: number) =>
 const configuredFrontUrl = process.env.FRONT_URL || 'http://localhost:3000';
 const configuredFeetiPlayUrl = process.env.FEETIPLAY_URL || 'http://localhost:5173';
 
+// Origines supplémentaires via env, séparées par des virgules (ex: EXTRA_ALLOWED_ORIGINS=https://feeti.io,https://www.feeti.io)
+const extraOrigins = (process.env.EXTRA_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
+
 export const allowedOrigins = [
   configuredFrontUrl,
   configuredFeetiPlayUrl,
+  ...extraOrigins,
   'http://localhost:8080',
   ...buildLocalhostOrigins(3000, 3),
   ...buildLocalhostOrigins(5173, 3),
 ];
 
-
-
-
-
-
-
-
 // Configuration CORS
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allowed?: boolean) => void) => {
-    // Allow requests with no origin (e.g., curl, mobile apps)
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    // Prévisualisations Vercel (*.vercel.app)
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+    console.warn(`[CORS] Origine bloquée : ${origin}`);
     return callback(new Error('CORS policy: origin not allowed'), false);
   },
   credentials: true,
 };
 
-
-
-
-
-
-
-
 app.use(cors(corsOptions));
-
-
-
 
 // Parser JSON et cookies
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
-
-
-
-
-
-
-
-
-
-
-
 
 // Routes
 app.get('/api/health', (_req, res) => {
@@ -131,27 +106,14 @@ app.use('/api/access', accessRouter);
 // ─── Chatbot Dialogflow ───────────────────────────────────────────────────────
 app.use('/api/chatbot', chatbotRouter);
 
-
-
-
-
-
-
-
 // Middleware pour routes non trouvées
 app.use((_req, res) => {
  res.status(StatusCodes.NOT_FOUND).json({ message: "Route non trouvée" });
 });
 
-
-
-
 // Middleware de gestion des erreurs
 app.use((err: Error | AppError, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error(err);
-
-
-
 
   // Gestion des erreurs Prisma (qui ont 'code' et 'meta')
   if ('code' in err && typeof err.code === 'string') {
@@ -167,17 +129,11 @@ app.use((err: Error | AppError, _req: express.Request, res: express.Response, _n
     }
   }
 
-
-
-
   // Gestion des AppError et autres erreurs
   const statusCode = (err instanceof AppError) ? err.statusCode : StatusCodes.INTERNAL_SERVER_ERROR;
   const message = err.message || 'Erreur interne du serveur';
   const errors = (err instanceof AppError) ? err.errors : undefined;
   res.status(statusCode).json({ message, ...(errors && { errors }) });
 });
-
-
-
 
 export default app;
