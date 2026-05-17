@@ -89,7 +89,7 @@ function baseLayout(content: string): string {
         </td></tr>
         <!-- Footer -->
         <tr><td style="background:#f9fafb;padding:24px 40px;text-align:center;border-top:1px solid #e5e7eb;">
-          <p style="margin:0;color:#9ca3af;font-size:12px;">© ${new Date().getFullYear()} Féeti. Tous droits réservés.</p>
+          <p style="margin:0;color:#9ca3af;font-size:12px;">© ${new Date().getFullYear()} Fééti.io , propulsé par Eroiste , Tous droits réservés.</p>
           <p style="margin:4px 0 0;color:#9ca3af;font-size:12px;">
             <a href="#" style="color:#6366f1;text-decoration:none;">Se désabonner</a> ·
             <a href="#" style="color:#6366f1;text-decoration:none;">Politique de confidentialité</a>

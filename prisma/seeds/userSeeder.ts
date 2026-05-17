@@ -31,7 +31,7 @@ export async function seedUsers(prisma: PrismaClient) {
     where: { email: 'buyer@feeti.cg' },
     update: {},
     create: {
-      name: 'Jean Féeteur',
+      name: 'Jean Fééteur',
       email: 'buyer@feeti.cg',
       passwordHash,
       role: 'user',

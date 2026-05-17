@@ -57,7 +57,7 @@ export const getStreamingEvents = controllerWrapper(async (_req: Request, res: R
     isFree: e.price === 0,
     price: e.price,
     currency: e.currency,
-    channelName: e.organizer?.name ?? "Féeti",
+    channelName: e.organizer?.name ?? "Fééti",
     country: e.country?.name ?? null,
     source: "feeti2" as const,
   }));
