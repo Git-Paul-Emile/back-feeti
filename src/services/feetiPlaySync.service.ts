@@ -35,6 +35,7 @@ interface SyncPayload {
   duration?: string;
   image?: string;
   category: string;
+  eventType?: 'STREAMING_LIVE' | 'MIXTE';
   isLive?: boolean;
   isFeatured?: boolean;
   streamUrl?: string;

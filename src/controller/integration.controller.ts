@@ -13,10 +13,12 @@ export const getStreamingEvents = controllerWrapper(async (_req: Request, res: R
   const events = await prisma.event.findMany({
     where: {
       status: "published",
+      eventType: { not: "PRESENTIEL" },
       OR: [
         { isLive: true },
         { streamUrl: { not: null } },
         { videoUrl: { not: null } },
+        { eventType: "MIXTE" },
       ],
     },
     select: {
@@ -28,6 +30,7 @@ export const getStreamingEvents = controllerWrapper(async (_req: Request, res: R
       duration: true,
       image: true,
       category: true,
+      eventType: true,
       isLive: true,
       isFeatured: true,
       streamUrl: true,
@@ -50,6 +53,7 @@ export const getStreamingEvents = controllerWrapper(async (_req: Request, res: R
     duration: e.duration ?? "",
     image: e.image,
     category: e.category,
+    eventType: (e.eventType === "MIXTE" ? "MIXTE" : "STREAMING_LIVE") as "STREAMING_LIVE" | "MIXTE",
     isLive: e.isLive,
     isFeatured: e.isFeatured,
     streamUrl: e.streamUrl ?? null,
