@@ -1,13 +1,11 @@
 // @ts-nocheck
 import type { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { PrismaClient } from "../generated/prisma/client.js";
+import { prisma } from "../config/database.js";
 import { jsonResponse } from "../utils/response.js";
 import { controllerWrapper } from "../utils/ControllerWrapper.js";
 import { AppError } from "../utils/AppError.js";
 import type { CreateBlogCategoryInput, UpdateBlogCategoryInput, CreateBlogPostInput, UpdateBlogPostInput } from "../validators/blog.validator.js";
-
-const prisma = new PrismaClient();
 
 function parseTags(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw;

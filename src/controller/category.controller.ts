@@ -1,11 +1,9 @@
 import type { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
-import { PrismaClient } from "../generated/prisma/client.js";
+import { prisma } from "../config/database.js";
 import { jsonResponse } from "../utils/response.js";
 import { controllerWrapper } from "../utils/ControllerWrapper.js";
 import { AppError } from "../utils/AppError.js";
-
-const prisma = new PrismaClient();
 
 export const getAllCategories = controllerWrapper(async (_req: Request, res: Response) => {
   const categories = await prisma.category.findMany({
