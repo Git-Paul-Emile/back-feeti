@@ -26,23 +26,28 @@ export interface IEmailProvider {
 // ─── Provider Nodemailer (SMTP) ───────────────────────────────────────
 
 class NodemailerProvider implements IEmailProvider {
-  private transporter: Transporter;
+  private transporter: Transporter | null = null;
 
-  constructor() {
-    this.transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: Number(process.env.SMTP_PORT) === 465,
-      auth: {
-        user: process.env.SMTP_USER,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+  private getTransporter(): Transporter {
+    if (!this.transporter) {
+      this.transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST || "smtp.gmail.com",
+        port: Number(process.env.SMTP_PORT) || 587,
+        secure: Number(process.env.SMTP_PORT) === 465,
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+    }
+    return this.transporter;
   }
 
   async send(options: EmailOptions): Promise<void> {
-    await this.transporter.sendMail({
-      from: process.env.EMAIL_FROM || "Féeti <noreply@feeti.app>",
+    const fromAddress = process.env.EMAIL_FROM || process.env.SMTP_FROM || process.env.SMTP_USER || "Féeti <noreply@feeti.app>";
+
+    await this.getTransporter().sendMail({
+      from: fromAddress,
       to: Array.isArray(options.to) ? options.to.join(", ") : options.to,
       subject: options.subject,
       html: options.html,
@@ -228,7 +233,7 @@ export function templateWelcomeUser(data: { userName: string }): string {
   `);
 }
 
-export function templateWelcomeOrganizer(data: { organizerName: string; contractHtml?: string }): string {
+export function templateWelcomeOrganizer(data: { organizerName: string; contractHtml?: string; pandadocSigningUrl?: string }): string {
   return baseLayout(`
     <div style="text-align:center;margin-bottom:32px;">
       <div style="display:inline-block;background:#fef3c7;border-radius:50%;padding:16px;margin-bottom:16px;">
@@ -253,12 +258,30 @@ export function templateWelcomeOrganizer(data: { organizerName: string; contract
         <li>Suivi des participants et rapports de vente</li>
       </ul>
     </div>
+    ${data.pandadocSigningUrl ? `
+    <div style="background:linear-gradient(135deg,#fef3c7,#fffbeb);border:2px solid #f59e0b;border-radius:12px;padding:28px;margin-top:28px;text-align:center;">
+      <div style="display:inline-block;background:#f59e0b;border-radius:50%;padding:10px;margin-bottom:12px;">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>
+      </div>
+      <h3 style="margin:0 0 8px;font-size:18px;font-weight:700;color:#92400e;">Signez votre contrat de partenariat</h3>
+      <p style="margin:0 0 20px;color:#78350f;font-size:14px;line-height:1.6;">
+        Pour finaliser votre partenariat avec Féeti, veuillez lire et signer<br/>le contrat ci-dessous. Cette étape est obligatoire pour publier vos événements.
+      </p>
+      <a href="${data.pandadocSigningUrl}" style="display:inline-block;background:linear-gradient(135deg,#d97706,#f59e0b);color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;font-weight:700;letter-spacing:0.3px;">
+        ✍️ Signer mon contrat
+      </a>
+      <p style="margin:16px 0 0;color:#9ca3af;font-size:12px;">
+        Ce lien est valable 7 jours. Après votre signature, le directeur Féeti contresignera.
+      </p>
+    </div>` : ""}
     ${data.contractHtml ? `
     <div style="border-top:2px solid #e5e7eb;padding-top:24px;margin-top:24px;">
       <h3 style="margin:0 0 16px;font-size:16px;font-weight:700;color:#111827;">Contrat organisateur</h3>
       ${data.contractHtml}
     </div>` : ""}
-    <p style="color:#9ca3af;font-size:13px;margin:0;">
+    <p style="color:#9ca3af;font-size:13px;margin:${data.pandadocSigningUrl || data.contractHtml ? "24px" : "0"} 0 0;">
       Si vous n'êtes pas à l'origine de cette inscription, contactez-nous immédiatement.
     </p>
   `);
@@ -351,11 +374,14 @@ class EmailService {
   }
 
   async sendWelcomeOrganizer(to: string, data: Parameters<typeof templateWelcomeOrganizer>[0]): Promise<void> {
+    const signingText = data.pandadocSigningUrl
+      ? ` Signez votre contrat de partenariat ici : ${data.pandadocSigningUrl}`
+      : "";
     await this.provider.send({
       to,
       subject: `Bienvenue sur Féeti Organisateur, ${data.organizerName} !`,
       html: templateWelcomeOrganizer(data),
-      text: `Bienvenue ${data.organizerName} ! Votre compte organisateur Féeti a été créé.`,
+      text: `Bienvenue ${data.organizerName} ! Votre compte organisateur Féeti a été créé.${signingText}`,
     });
   }
 

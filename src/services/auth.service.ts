@@ -5,6 +5,7 @@ import { authRepository } from "../repositories/auth.repository.js";
 import { generateToken, generateRefreshToken, generatePasswordResetToken, verifyPasswordResetToken } from "../config/jwt.js";
 import { fbAuth, db, FieldValue } from "../config/firebase-admin.js";
 import { addEmailJob } from "../queues/email.queue.js";
+import { emailService } from "./email.service.js";
 import type { RegisterInput, LoginInput, UpdateProfileInput, ChangePasswordInput } from "../validators/auth.validator.js";
 import type { Role } from "../generated/prisma/client.js";
 
@@ -17,6 +18,30 @@ function omitPassword<T extends { passwordHash?: string }>(user: T) {
 function formatPhone(phone: string): string | undefined {
   const cleaned = phone.replace(/\s+/g, "").replace(/^00/, "+");
   return cleaned.startsWith("+") ? cleaned : undefined;
+}
+
+async function enqueueWelcomeEmail(user: { role: Role; email: string; name: string }) {
+  if (user.role === "organizer") {
+    try {
+      await addEmailJob({ type: "welcome-organizer", to: user.email, organizerName: user.name });
+      console.log(`[auth] job welcome-organizer en queue pour ${user.email}`);
+    } catch (err) {
+      console.error(`[auth] échec queue welcome-organizer, envoi direct pour ${user.email}:`, err);
+      emailService.sendWelcomeOrganizer(user.email, { organizerName: user.name }).catch((e) =>
+        console.error(`[auth] échec envoi direct welcome-organizer pour ${user.email}:`, e)
+      );
+    }
+  } else {
+    try {
+      await addEmailJob({ type: "welcome-user", to: user.email, userName: user.name });
+      console.log(`[auth] job welcome-user en queue pour ${user.email}`);
+    } catch (err) {
+      console.error(`[auth] échec queue welcome-user, envoi direct pour ${user.email}:`, err);
+      emailService.sendWelcomeUser(user.email, { userName: user.name }).catch((e) =>
+        console.error(`[auth] échec envoi direct welcome-user pour ${user.email}:`, e)
+      );
+    }
+  }
 }
 
 export const authService = {
@@ -78,11 +103,8 @@ export const authService = {
     const accessToken = generateToken({ userId: user.id, role: user.role });
     const refreshToken = generateRefreshToken({ userId: user.id });
 
-    if (user.role === "organizer") {
-      addEmailJob({ type: "welcome-organizer", to: user.email, organizerName: user.name }).catch(() => {});
-    } else {
-      addEmailJob({ type: "welcome-user", to: user.email, userName: user.name }).catch(() => {});
-    }
+    console.log(`[auth] inscription OK — rôle: ${user.role}, email: ${user.email}`);
+    await enqueueWelcomeEmail(user);
 
     return { user: omitPassword(user), accessToken, refreshToken };
   },
@@ -215,11 +237,8 @@ export const authService = {
         photoUrl: firebasePhoto || null,
       });
 
-      if (user.role === "organizer") {
-        addEmailJob({ type: "welcome-organizer", to: user.email, organizerName: user.name }).catch(() => {});
-      } else {
-        addEmailJob({ type: "welcome-user", to: user.email, userName: user.name }).catch(() => {});
-      }
+      console.log(`[auth] inscription Firebase OK — rôle: ${user.role}, email: ${user.email}`);
+      await enqueueWelcomeEmail(user);
     } else {
       const updates: {
         firebaseUid?: string;
@@ -250,8 +269,14 @@ export const authService = {
         updates.phone = profileData.phone;
       }
 
+      const shouldSendWelcomeEmail = profileData.role === "organizer" && user.role !== "organizer";
       if (Object.keys(updates).length > 0) {
         user = await authRepository.updateUser(user.id, updates);
+      }
+
+      if (shouldSendWelcomeEmail) {
+        console.log(`[auth] rôle mis à jour vers organizer pour ${user.email}, préparation de l'email de bienvenue`);
+        await enqueueWelcomeEmail(user);
       }
     }
 
@@ -293,39 +318,16 @@ export const authService = {
     }
 
     if (!user) {
-      // Créer un compte automatiquement pour les nouveaux utilisateurs Google
-      user = await authRepository.createUser({
-        name: decodedToken.name || "Utilisateur",
-        email: firebaseEmail,
-        passwordHash: "",
-        role: "user" as Role,
-        interests: "[]",
-        firebaseUid,
-        photoUrl: decodedToken.picture || null,
-      });
-      
-      try {
-        await db.collection("users").doc(user.id).set({
-          id: user.id,
-          name: user.name,
-          email: user.email,
-          phone: user.phone || null,
-          role: user.role,
-          interests: [],
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp()
-        }, { merge: true });
-      } catch (err) {
-        console.error("Erreur lors de l'insertion dans Firestore :", err);
-      }
+      throw new AppError(
+        "Aucun profil trouvé pour ce compte Google. Veuillez compléter votre inscription.",
+        StatusCodes.NOT_FOUND
+      );
+    }
 
-      addEmailJob({ type: "welcome-user", to: user.email, userName: user.name }).catch(() => {});
-    } else {
-      // Mettre à jour le firebaseUid si pas encore lié
-      if (!user.firebaseUid) {
-        await authRepository.updateUser(user.id, { firebaseUid });
-        user.firebaseUid = firebaseUid;
-      }
+    // Lier le firebaseUid si pas encore fait
+    if (!user.firebaseUid) {
+      await authRepository.updateUser(user.id, { firebaseUid });
+      user.firebaseUid = firebaseUid;
     }
 
     const accessToken = generateToken({ userId: user.id, role: user.role });

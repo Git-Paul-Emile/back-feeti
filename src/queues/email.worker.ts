@@ -1,19 +1,37 @@
 import { Worker, type Job } from "bullmq";
 import { redisForWorker } from "../config/redis.js";
 import { emailService } from "../services/email.service.js";
+import { pandadocService } from "../services/pandadoc.service.js";
 import type { EmailJobData } from "./email.queue.js";
 
 async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
   const d = job.data;
+  console.log(`[email-queue] processing job ${job.id} (${d.type} → ${d.to})`);
 
   switch (d.type) {
     case "welcome-user":
       await emailService.sendWelcomeUser(d.to, { userName: d.userName });
       break;
 
-    case "welcome-organizer":
-      await emailService.sendWelcomeOrganizer(d.to, { organizerName: d.organizerName, contractHtml: d.contractHtml });
+    case "welcome-organizer": {
+      let pandadocSigningUrl: string | undefined = d.pandadocSigningUrl;
+      if (!pandadocSigningUrl) {
+        try {
+          pandadocSigningUrl = await pandadocService.createOrganizerContract({
+            name: d.organizerName,
+            email: d.to,
+          });
+        } catch (err) {
+          console.error("[pandadoc] Échec création contrat, email envoyé sans lien de signature:", err);
+        }
+      }
+      await emailService.sendWelcomeOrganizer(d.to, {
+        organizerName: d.organizerName,
+        contractHtml: d.contractHtml,
+        pandadocSigningUrl,
+      });
       break;
+    }
 
     case "ticket-confirmation":
       await emailService.sendTicketConfirmation(d.to, d.data);
@@ -50,6 +68,10 @@ export function startEmailWorker(): Worker<EmailJobData> {
   worker.on("failed", (job, err) => {
     const attempts = job?.attemptsMade ?? "?";
     console.error(`[email-queue] ✗ job ${job?.id} (${job?.data?.type}) tentative ${attempts} — ${err.message}`);
+  });
+
+  worker.on("error", (err) => {
+    console.error(`[email-queue] worker error — ${err.message}`, err);
   });
 
   console.log("[email-queue] worker démarré (concurrency: 5)");

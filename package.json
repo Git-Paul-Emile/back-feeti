@@ -12,6 +12,7 @@
     "dev:watch": "node --loader ts-node/esm --watch src/index.ts",
     "build": "npx prisma generate && tsc",
     "start": "node dist/index.js",
+    "test:smtp": "tsx scripts/test-smtp.ts",
     "generate": "npx prisma generate",
     "migrate": "npx prisma migrate dev",
     "seed": "tsx prisma/seed.ts"

@@ -1,11 +1,9 @@
-import dotenv from "dotenv";
+import "dotenv/config";
 import { createServer } from "http";
 import { connectToDatabase } from "./config/database.js";
 import app, { allowedOrigins } from "./config/app.js";
 import { initSocket } from "./config/socket.js";
 import { startEmailWorker } from "./queues/email.worker.js";
-
-dotenv.config();
 
 const REQUIRED_ENV_VARS = ["DATABASE_URL", "ACCESS_TOKEN_SECRET", "REFRESH_TOKEN_SECRET"];
 
