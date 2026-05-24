@@ -201,10 +201,12 @@ export const paymentService = {
     provider: "stripe" | "mobile_money" | "paystack";
     paymentId: string;
   }): Promise<boolean> {
+    // Fallback simulation : IDs générés côté frontend sans passer par initialize
+    if (params.paymentId.startsWith("sim_")) return true;
+
     switch (params.provider) {
       case "stripe": {
         const status = await this.getStripeIntentStatus(params.paymentId);
-        // En simulation : on considère pending/completed comme validés
         return status === "completed" || status === "pending";
       }
       case "mobile_money": {
