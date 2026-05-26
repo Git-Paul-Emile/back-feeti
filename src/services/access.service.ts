@@ -420,6 +420,7 @@ export const accessService = {
       categoryId: data.categoryId,
       holderName: data.holderName,
       holderEmail: data.holderEmail,
+      createdById: userId,
       ...(data.holderPhone && { holderPhone: data.holderPhone }),
       ...(data.holderPhoto && { holderPhoto: data.holderPhoto }),
       qrCode,
@@ -528,12 +529,12 @@ export const accessService = {
     await addEmailJob({
       type: "generic",
       to: badge.holderEmail,
-      subject: `Votre badge d'accès — ${badge.event.title}`,
+      subject: `Votre badge d'accès — ${badge.event!.title}`,
       html: `<div style="font-family:sans-serif;max-width:600px;margin:auto">
         <h2>Votre badge Feeti Access</h2>
         <p>Bonjour <strong>${badge.holderName}</strong>,</p>
-        <p>Voici votre badge d'accès pour l'événement <strong>${badge.event.title}</strong>.</p>
-        <p><strong>Catégorie :</strong> ${badge.category.name}</p>
+        <p>Voici votre badge d'accès pour l'événement <strong>${badge.event!.title}</strong>.</p>
+        <p><strong>Catégorie :</strong> ${badge.category!.name}</p>
         <p>Présentez le QR code ci-dessous à l'entrée de chaque zone :</p>
         <div style="background:#f5f5f5;padding:16px;border-radius:8px;word-break:break-all;font-size:12px">
           ${badge.qrCode}
@@ -556,7 +557,7 @@ export const accessService = {
 
     const result = await smsService.send(
       target,
-      `Feeti Access - ${badge.event.title}: badge ${badge.holderName}, categorie ${badge.category.name}. QR: ${badge.qrCode}`
+      `Feeti Access - ${badge.event!.title}: badge ${badge.holderName}, categorie ${badge.category!.name}. QR: ${badge.qrCode}`
     );
 
     return { badgeId: badge.id, phone: target, ...result };
@@ -604,12 +605,19 @@ export const accessService = {
     if (!badgeRaw) {
       return { result: "denied" as const, refusalReason: "Badge introuvable" };
     }
+    if (!badgeRaw.eventId || !badgeRaw.categoryId || !badgeRaw.category) {
+      return { result: "denied" as const, refusalReason: "Badge invalide" };
+    }
+    // Extraire en constantes pour que le narrowing survive les await
+    const bEventId = badgeRaw.eventId;
+    const bCategoryId = badgeRaw.categoryId;
+    const bCategory = badgeRaw.category;
 
     // 3. Vérifier la signature selon le format
     if (isRotating) {
       if (!verifyRotatingQrPayload(data.qrCode, badgeRaw.qrSecret, badgeRaw.id)) {
         await accessRepository.createAccessLog({
-          badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: badgeRaw.eventId,
+          badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
           scannedById: agentId, result: "denied", refusalReason: "QR rotatif invalide ou expiré",
         });
         return { result: "denied" as const, refusalReason: "QR rotatif invalide ou expiré" };
@@ -618,14 +626,14 @@ export const accessService = {
       // Format statique : le qrCode doit correspondre au qrCode stocké
       if (badgeRaw.qrCode !== data.qrCode) {
         await accessRepository.createAccessLog({
-          badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: badgeRaw.eventId,
+          badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
           scannedById: agentId, result: "denied", refusalReason: "QR code invalide",
         });
         return { result: "denied" as const, refusalReason: "QR code invalide" };
       }
       if (!verifyQrPayload(data.qrCode, badgeRaw.qrSecret)) {
         await accessRepository.createAccessLog({
-          badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: badgeRaw.eventId,
+          badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
           scannedById: agentId, result: "denied", refusalReason: "Signature QR invalide",
         });
         return { result: "denied" as const, refusalReason: "Signature QR invalide" };
@@ -635,7 +643,7 @@ export const accessService = {
     // 4. Vérifier le statut du badge
     if (badgeRaw.status === "revoked") {
       await accessRepository.createAccessLog({
-        badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: badgeRaw.eventId,
+        badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
         scannedById: agentId, result: "denied", refusalReason: "Badge révoqué",
       });
       return { result: "denied" as const, refusalReason: "Badge révoqué", holder: { name: badgeRaw.holderName, badgeId: badgeRaw.id, photo: (badgeRaw as any).holderPhoto } };
@@ -643,14 +651,14 @@ export const accessService = {
 
     if (badgeRaw.status === "expired") {
       await accessRepository.createAccessLog({
-        badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: badgeRaw.eventId,
+        badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
         scannedById: agentId, result: "denied", refusalReason: "Badge expiré",
       });
       return { result: "denied" as const, refusalReason: "Badge expiré", holder: { name: badgeRaw.holderName, badgeId: badgeRaw.id, photo: (badgeRaw as any).holderPhoto } };
     }
 
     // 5. Vérifier le droit d'accès pour cette zone
-    const right = await accessRepository.getAccessRight(badgeRaw.categoryId, data.zoneId);
+    const right = await accessRepository.getAccessRight(bCategoryId, data.zoneId);
     const level = right?.accessLevel ?? "NON";
 
     let result: "granted" | "denied" | "conditional";
@@ -663,11 +671,11 @@ export const accessService = {
       result = "conditional";
     } else {
       result = "denied";
-      refusalReason = `Accès non autorisé pour la catégorie "${badgeRaw.category.name}" dans cette zone`;
+      refusalReason = `Accès non autorisé pour la catégorie "${bCategory.name}" dans cette zone`;
     }
 
     await accessRepository.createAccessLog({
-      badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: badgeRaw.eventId,
+      badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
       scannedById: agentId, result,
       ...(refusalReason && { refusalReason }),
     });
@@ -677,9 +685,9 @@ export const accessService = {
       try {
         const zone = await accessRepository.findZoneById(data.zoneId);
         if (zone) {
-          const logCounts = await accessRepository.countLogsByZone(badgeRaw.eventId);
+          const logCounts = await accessRepository.countLogsByZone(bEventId);
           const countMap = Object.fromEntries(logCounts.map((c) => [c.zoneId, c._count._all]));
-          getIO().to(`event:${badgeRaw.eventId}`).emit("zone:update", {
+          getIO().to(`event:${bEventId}`).emit("zone:update", {
             zoneId: zone.id, code: zone.code, name: zone.name, color: zone.color,
             currentCount: zone.currentCount,
             totalEntries: countMap[zone.id] ?? 0,
@@ -691,7 +699,7 @@ export const accessService = {
     }
 
     // 7. Droits de la catégorie sur toutes les zones (affichage agent)
-    const allRights = await accessRepository.getAccessRightsByCategory(badgeRaw.categoryId);
+    const allRights = await accessRepository.getAccessRightsByCategory(bCategoryId);
 
     return {
       result,
@@ -702,7 +710,7 @@ export const accessService = {
         email: badgeRaw.holderEmail,
         phone: (badgeRaw as any).holderPhone,
         photo: (badgeRaw as any).holderPhoto,
-        category: badgeRaw.category.name,
+        category: bCategory.name,
         authorizedZones: allRights
           .filter((r) => r.accessLevel === "OUI" || r.accessLevel === "COND")
           .map((r) => ({ zoneId: r.zoneId, zoneName: r.zone.name, level: r.accessLevel })),
@@ -727,7 +735,7 @@ export const accessService = {
       if (!badgeId) continue;
 
       const badge = await accessRepository.findBadgeById(badgeId);
-      if (!badge) continue;
+      if (!badge || !badge.eventId || !badge.categoryId || !badge.category) continue;
 
       // Pour les scans offline on bypasse la vérification de fenêtre temporelle
       const right = await accessRepository.getAccessRight(badge.categoryId, scan.zoneId);

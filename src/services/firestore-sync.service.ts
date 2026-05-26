@@ -490,6 +490,7 @@ class FirestoreSyncService {
         case 'badges': {
           const badges = await prisma.accessBadge.findMany({ take: 100 });
           for (const badge of badges) {
+            if (!badge.eventId) continue;
             const result = await this.syncBadge({
               id: badge.id,
               eventId: badge.eventId,
