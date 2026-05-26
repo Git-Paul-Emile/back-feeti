@@ -67,6 +67,7 @@ export const eventService = {
     videoUrl?: string;
     countryCode?: string;
     organizerId: string;
+    featuredHomepage?: boolean;
   }) {
     const targetEventType = data.eventType ?? (data.isLive ? "STREAMING_LIVE" : "PRESENTIEL");
 
@@ -101,12 +102,22 @@ export const eventService = {
     }
 
     // Présentiel / Mixte: l'événement existe dans Feeti2 (PostgreSQL).
+    const { featuredHomepage, ...eventData } = data;
     const event = await eventRepository.create({
-      ...data,
+      ...eventData,
       eventType: targetEventType,
       isLive: targetEventType === "MIXTE" ? true : !!data.isLive,
     });
-    
+
+    // Si l'organisateur a coché "Mise en avant", créer automatiquement la demande
+    if (featuredHomepage) {
+      await prisma.featuredRequest.create({
+        data: { eventId: event.id, organizerId: data.organizerId },
+      }).catch((err) => {
+        logger.error(`Erreur création FeaturedRequest pour event ${event.id}:`, err);
+      });
+    }
+
     // Synchroniser dans Firestore
     await firestoreSyncService.syncEvent(event).catch((err) => {
       logger.error(`Erreur sync Firestore pour event ${event.id}:`, err);
