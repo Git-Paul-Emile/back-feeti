@@ -51,10 +51,22 @@ export const ticketRepository = {
     return prisma.ticket.count({ where: { eventId } });
   },
 
+  async countByUserAndEvent(userId: string, eventId: string) {
+    return prisma.ticket.count({ where: { userId, eventId } });
+  },
+
   async updateStatus(id: string, status: string, usedAt?: Date) {
     return prisma.ticket.update({
       where: { id },
       data: { status, ...(usedAt && { usedAt }) },
+    });
+  },
+
+  async updateRefundRequest(id: string, reason: string) {
+    return prisma.ticket.update({
+      where: { id },
+      data: { status: "refund_requested", refundReason: reason, refundRequestedAt: new Date() },
+      include: { event: true },
     });
   },
 };

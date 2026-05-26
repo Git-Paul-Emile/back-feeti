@@ -51,6 +51,8 @@ model User {
   passwordHash String
   role         Role           @default(user)
   interests    String         @default("[]") // JSON array of event category slugs
+  country      String?        // Pays de résidence
+  city         String?        // Ville de résidence
   firebaseUid  String?        @unique // UID Firebase Auth (pour connexion Firebase)
   photoUrl     String?        // URL de la photo de profil (Firebase ou autre)
   createdAt    DateTime       @default(now())
@@ -75,6 +77,8 @@ model User {
   processedPayouts    Payout[]          @relation("PayoutProcessedBy")
   // Fidélité
   loyaltyProfile      LoyaltyProfile?
+  // Feeti Access — badges créés par cet organisateur
+  createdBadges       AccessBadge[]     @relation("BadgesCreated")
 }
 
 model UserFavorite {
@@ -335,6 +339,9 @@ model Ticket {
   deliveryStatus   DeliveryStatus?
   deliveryAddress  DeliveryAddress?
   transaction      Transaction?
+  // Remboursement
+  refundReason       String?
+  refundRequestedAt  DateTime?
   // Feeti Access
   accessBadge      AccessBadge?
   createdAt        DateTime        @default(now())
@@ -967,32 +974,41 @@ model ZoneAccessRight {
   @@index([zoneId])
 }
 
-// Badge QR par participant (lié à un ticket ou créé indépendamment)
+// Badge QR par participant (lié à un ticket/événement ou créé de façon indépendante)
 model AccessBadge {
-  id           String              @id @default(cuid())
-  eventId      String
-  event        Event               @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  ticketId     String?             @unique
-  ticket       Ticket?             @relation(fields: [ticketId], references: [id])
-  categoryId   String
-  category     ParticipantCategory @relation(fields: [categoryId], references: [id])
+  id           String               @id @default(cuid())
+  // Lien événement — null pour les badges indépendants
+  eventId      String?
+  event        Event?               @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  ticketId     String?              @unique
+  ticket       Ticket?              @relation(fields: [ticketId], references: [id])
+  // Lien catégorie — null pour les badges indépendants
+  categoryId   String?
+  category     ParticipantCategory? @relation(fields: [categoryId], references: [id])
+  // Champs libres pour les badges indépendants
+  eventLabel    String?             // Nom de l'événement ou objet du badge (badges standalone)
+  categoryLabel String?             // Intitulé de la catégorie (badges standalone)
+  // Identifiant du créateur (organisateur) — obligatoire
+  createdById  String
+  createdBy    User                 @relation("BadgesCreated", fields: [createdById], references: [id])
   holderName   String
   holderEmail  String
   holderPhone  String?
   holderPhoto  String?
-  qrCode       String              @unique
+  qrCode       String               @unique
   qrSecret     String
-  status       BadgeStatus         @default(active)
+  status       BadgeStatus          @default(active)
   sentAt       DateTime?
   revokedAt    DateTime?
   revokedById  String?
-  createdAt    DateTime            @default(now())
-  updatedAt    DateTime            @updatedAt
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
 
   accessLogs     AccessLog[]
   suspectReports SuspectBadgeReport[]
 
   @@index([eventId])
+  @@index([createdById])
   @@index([status])
 }
 

@@ -6,6 +6,7 @@ import {
   getTicketById,
   verifyTicket,
   getEventTickets,
+  requestRefund,
 } from "../controller/ticket.controller.js";
 
 const router = Router();
@@ -21,6 +22,9 @@ router.get("/:id", authenticate, getTicketById);
 
 // Organisateur/Admin : vérifier un QR code
 router.post("/verify", authenticate, requireRole("organizer", "admin", "super_admin"), verifyTicket);
+
+// Acheteur : demander un remboursement
+router.post("/:id/refund-request", authenticate, requestRefund);
 
 // Organisateur/Admin : voir les billets d'un événement
 router.get("/event/:eventId", authenticate, requireRole("organizer", "admin", "super_admin"), getEventTickets);

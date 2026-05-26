@@ -7,8 +7,10 @@ import {
   createCategory, applyDefaultCategories, getCategories, updateCategory, deleteCategory,
   // Droits d'accès
   setAccessRights, applyDefaultMatrix, getAccessMatrix,
-  // Badges
+  // Badges liés à un événement
   generateBadge, getBadges, sendBadge, sendBadgeSms, revokeBadge, regenerateBadge, getCurrentQr,
+  // Badges indépendants
+  generateStandaloneBadge, getStandaloneBadges, revokeStandaloneBadge, sendStandaloneBadge,
   // Scan
   scanBadge, syncOffline, verifyAgentCode,
   // Tracking & Reporting
@@ -49,6 +51,12 @@ router.post  ("/events/:eventId/badges/:badgeId/send-sms",      authenticate, or
 router.post  ("/events/:eventId/badges/:badgeId/revoke",        authenticate, orgOrAdmin, revokeBadge);
 router.post  ("/events/:eventId/badges/:badgeId/regenerate",    authenticate, orgOrAdmin, regenerateBadge);
 router.get   ("/events/:eventId/badges/:badgeId/qr",            authenticate, orgOrAdmin, getCurrentQr);
+
+// ── Badges indépendants (sans événement obligatoire) ──────────────────
+router.post  ("/badges/standalone",              authenticate, orgOrAdmin, generateStandaloneBadge);
+router.get   ("/badges/standalone",              authenticate, orgOrAdmin, getStandaloneBadges);
+router.post  ("/badges/standalone/:badgeId/revoke", authenticate, orgOrAdmin, revokeStandaloneBadge);
+router.post  ("/badges/standalone/:badgeId/send",   authenticate, orgOrAdmin, sendStandaloneBadge);
 
 // ── Scan (agents terrain) ─────────────────────────────────────────────
 router.post  ("/scan",        authenticate, agentOrAbove, scanBadge);

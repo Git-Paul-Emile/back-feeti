@@ -14,15 +14,17 @@ export const authRepository = {
     return prisma.user.findUnique({ where: { firebaseUid } });
   },
 
-  async updateUser(id: string, data: { 
-    name?: string; 
-    email?: string; 
-    phone?: string | null; 
-    passwordHash?: string; 
+  async updateUser(id: string, data: {
+    name?: string;
+    email?: string;
+    phone?: string | null;
+    passwordHash?: string;
     interests?: string;
     firebaseUid?: string;
     photoUrl?: string | null;
     role?: Role;
+    country?: string;
+    city?: string;
   }) {
     return prisma.user.update({ where: { id }, data });
   },
@@ -40,6 +42,8 @@ export const authRepository = {
     interests?: string;
     firebaseUid?: string;
     photoUrl?: string | null;
+    country?: string;
+    city?: string;
   }) {
     return prisma.user.create({ data });
   },

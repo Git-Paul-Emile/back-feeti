@@ -3,6 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, 
 import { AppError } from "../utils/AppError.js";
 import { accessRepository } from "../repositories/access.repository.js";
 import { eventRepository } from "../repositories/event.repository.js";
+import { prisma } from "../config/database.js";
 import { feetiPlaySyncService } from "./feetiPlaySync.service.js";
 import { firestoreSyncService } from "./firestore-sync.service.js";
 import { addEmailJob } from "../queues/email.queue.js";
@@ -436,6 +437,86 @@ export const accessService = {
   async getBadges(eventId: string, userId: string, role: string) {
     await assertOrganizerOrAdmin(eventId, userId, role);
     return accessRepository.findBadgesByEvent(eventId);
+  },
+
+  // ── Badges indépendants (sans événement obligatoire) ──────────────────
+
+  async generateStandaloneBadge(userId: string, data: {
+    holderName: string;
+    holderEmail: string;
+    holderPhone?: string;
+    holderPhoto?: string;
+    categoryLabel: string;
+    eventLabel?: string;
+    eventId?: string;
+  }) {
+    // Vérifier que l'eventId fourni appartient bien à l'organisateur si précisé
+    if (data.eventId) {
+      const event = await prisma.event.findUnique({ where: { id: data.eventId }, select: { organizerId: true } });
+      if (!event) throw new AppError("Événement introuvable", StatusCodes.NOT_FOUND);
+      if (event.organizerId !== userId) throw new AppError("Vous n'êtes pas l'organisateur de cet événement", StatusCodes.FORBIDDEN);
+    }
+
+    const badgeId = randomUUID();
+    const secret = randomUUID();
+    // QR sans zone ni catégorie Prisma — payload simple
+    const qrPayload = JSON.stringify({ t: "standalone", b: badgeId, s: secret.slice(0, 8) });
+
+    const badge = await accessRepository.createBadge({
+      eventId: data.eventId ?? null,
+      categoryId: null,
+      categoryLabel: data.categoryLabel,
+      eventLabel: data.eventLabel ?? null,
+      createdById: userId,
+      holderName: data.holderName,
+      holderEmail: data.holderEmail,
+      ...(data.holderPhone && { holderPhone: data.holderPhone }),
+      ...(data.holderPhoto && { holderPhoto: data.holderPhoto }),
+      qrCode: qrPayload,
+      qrSecret: secret,
+    });
+
+    return badge;
+  },
+
+  async getStandaloneBadges(userId: string) {
+    return accessRepository.findStandaloneBadgesByCreator(userId);
+  },
+
+  async revokeStandaloneBadge(badgeId: string, userId: string) {
+    const badge = await accessRepository.findBadgeById(badgeId);
+    if (!badge) throw new AppError("Badge introuvable", StatusCodes.NOT_FOUND);
+    if ((badge as any).createdById !== userId) throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
+    if (badge.status === "revoked") throw new AppError("Badge déjà révoqué", StatusCodes.BAD_REQUEST);
+    return accessRepository.updateBadge(badgeId, { status: "revoked", revokedAt: new Date(), revokedById: userId });
+  },
+
+  async sendStandaloneBadgeByEmail(badgeId: string, userId: string) {
+    const badge = await accessRepository.findBadgeById(badgeId);
+    if (!badge) throw new AppError("Badge introuvable", StatusCodes.NOT_FOUND);
+    if ((badge as any).createdById !== userId) throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
+    if (badge.status === "revoked") throw new AppError("Badge révoqué", StatusCodes.BAD_REQUEST);
+
+    const eventTitle = (badge as any).eventLabel ?? (badge as any).event?.title ?? "Feeti Access";
+    const categoryName = (badge as any).categoryLabel ?? (badge as any).category?.name ?? "Participant";
+
+    await addEmailJob({
+      type: "generic",
+      to: badge.holderEmail,
+      subject: `Votre badge d'accès — ${eventTitle}`,
+      html: `<div style="font-family:sans-serif;max-width:600px;margin:auto">
+        <h2>Votre badge Feeti Access</h2>
+        <p>Bonjour <strong>${badge.holderName}</strong>,</p>
+        <p>Voici votre badge d'accès pour : <strong>${eventTitle}</strong>.</p>
+        <p><strong>Catégorie :</strong> ${categoryName}</p>
+        <p>Présentez le QR code ci-dessous à l'entrée :</p>
+        <div style="background:#f5f5f5;padding:16px;border-radius:8px;word-break:break-all;font-size:12px">
+          ${badge.qrCode}
+        </div>
+        <p style="color:#888;font-size:12px">Ce badge est personnel et non transférable.</p>
+      </div>`,
+    });
+    return accessRepository.updateBadge(badgeId, { sentAt: new Date() });
   },
 
   async sendBadgeByEmail(eventId: string, badgeId: string, userId: string, role: string) {

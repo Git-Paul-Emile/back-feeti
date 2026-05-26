@@ -45,6 +45,16 @@ export const generateBadgeSchema = z.object({
   ticketId: z.string().optional(),
 });
 
+export const generateStandaloneBadgeSchema = z.object({
+  holderName: z.string().min(2).max(100),
+  holderEmail: z.string().email(),
+  holderPhone: z.string().min(6).max(30).optional(),
+  holderPhoto: z.string().url().max(1000).optional(),
+  categoryLabel: z.string().min(1).max(100).default("Participant"),
+  eventLabel: z.string().max(200).optional(),
+  eventId: z.string().optional(), // lien facultatif vers un événement existant
+});
+
 export const scanSchema = z.object({
   qrCode: z.string().min(1),
   zoneId: z.string().min(1),
@@ -79,5 +89,6 @@ export type CreateZoneInput = z.infer<typeof createZoneSchema>;
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type SetAccessRightsInput = z.infer<typeof setAccessRightsSchema>;
 export type GenerateBadgeInput = z.infer<typeof generateBadgeSchema>;
+export type GenerateStandaloneBadgeInput = z.infer<typeof generateStandaloneBadgeSchema>;
 export type ScanInput = z.infer<typeof scanSchema>;
 export type SyncOfflineInput = z.infer<typeof syncOfflineSchema>;

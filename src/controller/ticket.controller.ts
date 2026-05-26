@@ -51,3 +51,17 @@ export const getEventTickets = controllerWrapper(async (req: Request, res: Respo
     jsonResponse({ status: "success", message: "Billets de l'événement récupérés", data: tickets })
   );
 });
+
+export const requestRefund = controllerWrapper(async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const ticketId = String(req.params.id);
+  const { reason } = req.body as { reason?: string };
+  if (!reason?.trim()) {
+    res.status(StatusCodes.BAD_REQUEST).json(jsonResponse({ status: "error", message: "La raison du remboursement est obligatoire" }));
+    return;
+  }
+  const ticket = await ticketService.requestRefund(ticketId, userId, reason.trim());
+  res.status(StatusCodes.OK).json(
+    jsonResponse({ status: "success", message: "Demande de remboursement envoyée. Délai de traitement : 5 à 7 jours ouvrables.", data: ticket })
+  );
+});

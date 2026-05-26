@@ -51,6 +51,23 @@ export const ticketService = {
       throw new AppError("Nombre maximum de participants atteint", StatusCodes.BAD_REQUEST);
     }
 
+    // Limite de 3 billets par utilisateur par événement
+    const MAX_TICKETS_PER_USER = 3;
+    const existingCount = await ticketRepository.countByUserAndEvent(data.userId, data.eventId);
+    if (existingCount + totalQty > MAX_TICKETS_PER_USER) {
+      const remaining = MAX_TICKETS_PER_USER - existingCount;
+      if (remaining <= 0) {
+        throw new AppError(
+          `Vous avez déjà atteint la limite de ${MAX_TICKETS_PER_USER} billets pour cet événement`,
+          StatusCodes.BAD_REQUEST
+        );
+      }
+      throw new AppError(
+        `Vous ne pouvez acheter que ${remaining} billet${remaining > 1 ? 's' : ''} supplémentaire${remaining > 1 ? 's' : ''} pour cet événement (limite : ${MAX_TICKETS_PER_USER})`,
+        StatusCodes.BAD_REQUEST
+      );
+    }
+
     // Résoudre la livraison physique
     let deliveryFee = 0;
 
@@ -141,6 +158,16 @@ export const ticketService = {
 
     const updated = await ticketRepository.updateStatus(ticket.id, "used", new Date());
     return { ticket: updated, message: "Billet validé avec succès" };
+  },
+
+  async requestRefund(ticketId: string, userId: string, reason: string) {
+    const ticket = await ticketRepository.findById(ticketId);
+    if (!ticket) throw new AppError("Billet introuvable", StatusCodes.NOT_FOUND);
+    if (ticket.userId !== userId) throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
+    if (ticket.status === "used") throw new AppError("Ce billet a déjà été utilisé, le remboursement n'est pas possible", StatusCodes.BAD_REQUEST);
+    if (ticket.status === "refund_requested") throw new AppError("Une demande de remboursement est déjà en cours pour ce billet", StatusCodes.BAD_REQUEST);
+    if (ticket.status === "refunded") throw new AppError("Ce billet a déjà été remboursé", StatusCodes.BAD_REQUEST);
+    return ticketRepository.updateRefundRequest(ticketId, reason);
   },
 
   async getEventTickets(eventId: string, organizerId: string, role?: string) {

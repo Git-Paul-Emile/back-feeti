@@ -12,6 +12,7 @@ import {
   updateCategorySchema,
   setAccessRightsSchema,
   generateBadgeSchema,
+  generateStandaloneBadgeSchema,
   scanSchema,
   syncOfflineSchema,
   reportSuspectSchema,
@@ -205,6 +206,37 @@ export const regenerateBadge = controllerWrapper(async (req: Request, res: Respo
   const badge = await accessService.regenerateBadge(eventId, badgeId, userId, role);
   await auditAccessAction(req, "ACCESS_BADGE_REGENERATED", "AccessBadge", badgeId, { eventId });
   res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Badge régénéré", data: badge }));
+});
+
+// ─── Badges indépendants (standalone) ────────────────────────────────
+
+export const generateStandaloneBadge = controllerWrapper(async (req: Request, res: Response) => {
+  const { userId } = req.user!;
+  const data = generateStandaloneBadgeSchema.parse(req.body);
+  const badge = await accessService.generateStandaloneBadge(userId, data);
+  await auditAccessAction(req, "ACCESS_STANDALONE_BADGE_GENERATED", "AccessBadge", badge.id, {});
+  res.status(StatusCodes.CREATED).json(jsonResponse({ status: "success", message: "Badge indépendant créé", data: badge }));
+});
+
+export const getStandaloneBadges = controllerWrapper(async (req: Request, res: Response) => {
+  const { userId } = req.user!;
+  const badges = await accessService.getStandaloneBadges(userId);
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Badges récupérés", data: badges }));
+});
+
+export const revokeStandaloneBadge = controllerWrapper(async (req: Request, res: Response) => {
+  const { userId } = req.user!;
+  const badgeId = String(req.params.badgeId);
+  const badge = await accessService.revokeStandaloneBadge(badgeId, userId);
+  await auditAccessAction(req, "ACCESS_STANDALONE_BADGE_REVOKED", "AccessBadge", badgeId, {});
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Badge révoqué", data: badge }));
+});
+
+export const sendStandaloneBadge = controllerWrapper(async (req: Request, res: Response) => {
+  const { userId } = req.user!;
+  const badgeId = String(req.params.badgeId);
+  const badge = await accessService.sendStandaloneBadgeByEmail(badgeId, userId);
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Badge envoyé par email", data: badge }));
 });
 
 // ─── Scan ─────────────────────────────────────────────────────────────

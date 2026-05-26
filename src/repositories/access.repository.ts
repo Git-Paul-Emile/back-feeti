@@ -131,9 +131,12 @@ export const accessRepository = {
   // ── Badges ───────────────────────────────────────────────────────────
 
   async createBadge(data: {
-    eventId: string;
+    eventId?: string | null;
+    categoryId?: string | null;
+    eventLabel?: string | null;
+    categoryLabel?: string | null;
+    createdById: string;
     ticketId?: string;
-    categoryId: string;
     holderName: string;
     holderEmail: string;
     holderPhone?: string;
@@ -143,27 +146,35 @@ export const accessRepository = {
   }) {
     return prisma.accessBadge.create({
       data: data as any,
-      include: { category: true },
+      include: { category: true, event: { select: { id: true, title: true } } },
     });
   },
 
   async findBadgeById(id: string) {
     return prisma.accessBadge.findUnique({
       where: { id },
-      include: { category: { include: { accessRights: { include: { zone: true } } } }, event: true },
+      include: { category: { include: { accessRights: { include: { zone: true } } } }, event: { select: { id: true, title: true } } },
     });
   },
 
   async findBadgeByQrCode(qrCode: string) {
     return prisma.accessBadge.findUnique({
       where: { qrCode },
-      include: { category: { include: { accessRights: { include: { zone: true } } } }, event: true },
+      include: { category: { include: { accessRights: { include: { zone: true } } } }, event: { select: { id: true, title: true } } },
     });
   },
 
   async findBadgesByEvent(eventId: string) {
     return prisma.accessBadge.findMany({
       where: { eventId },
+      include: { category: true },
+      orderBy: { createdAt: "desc" },
+    });
+  },
+
+  async findStandaloneBadgesByCreator(createdById: string) {
+    return prisma.accessBadge.findMany({
+      where: { createdById, eventId: null },
       include: { category: true },
       orderBy: { createdAt: "desc" },
     });

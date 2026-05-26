@@ -118,30 +118,24 @@ export function templateTicketConfirmation(data: {
   totalAmount: number;
   currency: string;
 }): string {
+  const FRONTEND_URL = process.env.FRONTEND_URL || "https://feeti.cg";
+
   const ticketRows = data.tickets
     .map(
       (t, i) => `
     <div style="border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin-bottom:16px;position:relative;overflow:hidden;">
       <div style="position:absolute;top:0;left:0;bottom:0;width:6px;background:linear-gradient(135deg,#4338ca,#7c3aed);border-radius:0;"></div>
       <div style="margin-left:16px;">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;">
           <div>
-            <p style="margin:0;font-size:14px;color:#6b7280;">Billet ${i + 1}</p>
+            <p style="margin:0;font-size:13px;color:#6b7280;">Billet ${i + 1}</p>
             <p style="margin:2px 0 0;font-size:18px;font-weight:700;color:#111827;">${t.category.toUpperCase()}</p>
           </div>
           <div style="text-align:right;">
             <p style="margin:0;font-size:14px;font-weight:700;color:#4338ca;">${t.price.toLocaleString("fr-FR")} ${t.currency}</p>
           </div>
         </div>
-        ${
-          t.qrDataUrl
-            ? `<div style="text-align:center;margin-top:12px;">
-                <img src="${t.qrDataUrl}" alt="QR Code" style="width:160px;height:160px;border:1px solid #e5e7eb;border-radius:8px;padding:4px;"/>
-                <p style="margin:8px 0 0;font-size:11px;color:#9ca3af;">Présentez ce QR code à l'entrée</p>
-              </div>`
-            : ""
-        }
-        <p style="margin:8px 0 0;font-size:11px;color:#6b7280;">ID : ${t.id}</p>
+        <p style="margin:10px 0 0;font-size:11px;color:#9ca3af;font-family:monospace;">Réf : ${t.id.slice(-12).toUpperCase()}</p>
       </div>
     </div>`
     )
@@ -172,10 +166,20 @@ export function templateTicketConfirmation(data: {
     <h3 style="margin:0 0 16px;font-size:18px;font-weight:700;color:#111827;">Vos billets (${data.tickets.length})</h3>
     ${ticketRows}
 
-    <div style="background:#fefce8;border:1px solid #fde047;border-radius:10px;padding:16px;margin-top:24px;">
+    <!-- Bouton téléchargement PDF -->
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${FRONTEND_URL}/tickets" style="display:inline-block;background:linear-gradient(135deg,#4338ca,#7c3aed);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:700;letter-spacing:0.02em;">
+        📥 Télécharger mes billets (PDF)
+      </a>
+      <p style="margin:12px 0 0;font-size:12px;color:#9ca3af;">
+        Connectez-vous à votre espace personnel → "Mes billets" → "Télécharger PDF"
+      </p>
+    </div>
+
+    <div style="background:#fefce8;border:1px solid #fde047;border-radius:10px;padding:16px;margin-top:8px;">
       <p style="margin:0;font-size:14px;color:#713f12;text-align:center;">
-        <strong>Important :</strong> Présentez le QR code à l'entrée de l'événement.
-        Chaque billet n'est valable qu'une seule fois.
+        <strong>Important :</strong> Le QR code d'entrée est disponible dans votre billet PDF.
+        Présentez-le à l'entrée de l'événement. Chaque billet n'est valable qu'une seule fois.
       </p>
     </div>
 

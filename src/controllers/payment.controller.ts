@@ -167,6 +167,7 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
     0
   );
 
+  // Email sans QR code dans le corps — le PDF est téléchargeable depuis la plateforme
   addEmailJob({
     type: "ticket-confirmation",
     to: holderEmail,
@@ -182,7 +183,7 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
         category: t.category,
         price: t.price,
         currency: t.currency,
-        qrDataUrl: t.qrDataUrl,
+        // qrDataUrl intentionnellement omis : QR uniquement dans le PDF téléchargeable
       })),
       totalAmount,
       currency: ticketsWithQR[0]?.currency ?? "FCFA",

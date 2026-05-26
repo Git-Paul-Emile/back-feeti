@@ -61,6 +61,8 @@ export const authService = {
       passwordHash,
       role: (data.role || "user") as Role,
       interests: data.interests ? JSON.stringify(data.interests) : "[]",
+      country: data.country || undefined,
+      city: data.city || undefined,
     });
 
     // Créer un compte Firebase Auth pour uniformiser
@@ -235,6 +237,8 @@ export const authService = {
         interests: profileData.interests ? JSON.stringify(profileData.interests) : "[]",
         firebaseUid,
         photoUrl: firebasePhoto || null,
+        country: (profileData as any).country || undefined,
+        city: (profileData as any).city || undefined,
       });
 
       console.log(`[auth] inscription Firebase OK — rôle: ${user.role}, email: ${user.email}`);

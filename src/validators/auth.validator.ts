@@ -18,6 +18,8 @@ export const registerSchema = z.object({
     .regex(/[0-9]/, "Le mot de passe doit contenir au moins un chiffre"),
   role: z.enum(["user", "organizer"]).optional(),
   interests: z.array(z.string()).optional(),
+  country: z.string().min(1, "Le pays est requis").optional(),
+  city: z.string().min(1, "La ville est requise").optional(),
 });
 
 export const loginSchema = z.object({
@@ -76,6 +78,8 @@ export const firebaseRegisterSchema = z.object({
     .or(z.literal("")),
   role: z.enum(["user", "organizer"]).optional(),
   interests: z.array(z.string()).optional(),
+  country: z.string().min(1, "Le pays est requis").optional(),
+  city: z.string().min(1, "La ville est requise").optional(),
 });
 
 export const firebaseLoginSchema = z.object({
