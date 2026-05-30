@@ -7,6 +7,7 @@ import {
   verifyTicket,
   getEventTickets,
   requestRefund,
+  downloadTicketPDF,
 } from "../controller/ticket.controller.js";
 
 const router = Router();
@@ -16,6 +17,9 @@ router.post("/purchase", authenticate, purchaseTickets);
 
 // Acheteur : voir ses billets
 router.get("/my", authenticate, getMyTickets);
+
+// Téléchargement PDF direct (pas d'auth — lien depuis email)
+router.get("/:id/download", downloadTicketPDF);
 
 // Acheteur/Admin/Organisateur : voir un billet
 router.get("/:id", authenticate, getTicketById);

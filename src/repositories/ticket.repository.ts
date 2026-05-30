@@ -14,7 +14,7 @@ export const ticketRepository = {
     deliveryMethod?: "email" | "physical";
     deliveryStatus?: "pending" | "processing" | "shipped" | "delivered" | "failed";
   }) {
-    return prisma.ticket.create({ data });
+    return prisma.ticket.create({ data, include: { event: true } });
   },
 
   async findByUser(userId: string) {

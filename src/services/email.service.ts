@@ -119,6 +119,7 @@ export function templateTicketConfirmation(data: {
   currency: string;
 }): string {
   const FRONTEND_URL = process.env.FRONTEND_URL || "https://feeti.cg";
+  const API_URL = process.env.API_URL || "https://api.feeti.cg";
 
   const ticketRows = data.tickets
     .map(
@@ -135,7 +136,10 @@ export function templateTicketConfirmation(data: {
             <p style="margin:0;font-size:14px;font-weight:700;color:#4338ca;">${t.price.toLocaleString("fr-FR")} ${t.currency}</p>
           </div>
         </div>
-        <p style="margin:10px 0 0;font-size:11px;color:#9ca3af;font-family:monospace;">Réf : ${t.id.slice(-12).toUpperCase()}</p>
+        <p style="margin:10px 0 4px;font-size:11px;color:#9ca3af;font-family:monospace;">Réf : ${t.id.slice(-12).toUpperCase()}</p>
+        <a href="${API_URL}/api/tickets/${t.id}/download" style="display:inline-block;margin-top:12px;background:linear-gradient(135deg,#4338ca,#7c3aed);color:#ffffff;text-decoration:none;padding:9px 22px;border-radius:8px;font-size:14px;font-weight:600;">
+          ⬇ Télécharger
+        </a>
       </div>
     </div>`
     )
@@ -166,15 +170,6 @@ export function templateTicketConfirmation(data: {
     <h3 style="margin:0 0 16px;font-size:18px;font-weight:700;color:#111827;">Vos billets (${data.tickets.length})</h3>
     ${ticketRows}
 
-    <!-- Bouton téléchargement PDF -->
-    <div style="text-align:center;margin:28px 0;">
-      <a href="${FRONTEND_URL}/tickets" style="display:inline-block;background:linear-gradient(135deg,#4338ca,#7c3aed);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:700;letter-spacing:0.02em;">
-        📥 Télécharger mes billets (PDF)
-      </a>
-      <p style="margin:12px 0 0;font-size:12px;color:#9ca3af;">
-        Connectez-vous à votre espace personnel → "Mes billets" → "Télécharger PDF"
-      </p>
-    </div>
 
     <div style="background:#fefce8;border:1px solid #fde047;border-radius:10px;padding:16px;margin-top:8px;">
       <p style="margin:0;font-size:14px;color:#713f12;text-align:center;">
