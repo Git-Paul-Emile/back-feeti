@@ -10,7 +10,7 @@
     "dev": "tsx watch src/index.ts",
     "dev:local": "PORT=3003 DATABASE_URL=\"mysql://app_user:app_pass@127.0.0.1:3306/esca_odc\" node --loader ts-node/esm src/index.ts",
     "dev:watch": "node --loader ts-node/esm --watch src/index.ts",
-    "build": "npx prisma generate && tsc",
+    "build": "npx prisma generate && tsc && cp -r src/assets dist/",
     "start": "node dist/index.js",
     "test:smtp": "tsx scripts/test-smtp.ts",
     "generate": "npx prisma generate",
