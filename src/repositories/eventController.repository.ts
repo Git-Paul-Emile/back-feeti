@@ -9,9 +9,13 @@ export const eventControllerRepository = {
     });
   },
 
-  /** Retirer un contrôleur d'un événement */
-  async remove(eventId: string, controllerId: string) {
-    return prisma.eventController.deleteMany({ where: { eventId, controllerId } });
+  /** Retirer un contrôleur d'un événement (par ID d'affectation) */
+  async remove(eventId: string, assignmentId: string) {
+    const result = await prisma.eventController.deleteMany({ where: { id: assignmentId, eventId } });
+    if (result.count === 0) {
+      throw new Error("Affectation introuvable pour cet événement");
+    }
+    return result;
   },
 
   /** Lister les contrôleurs d'un événement */

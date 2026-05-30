@@ -125,13 +125,23 @@ export const listEventControllers = controllerWrapper(async (req: Request, res: 
 /** Retirer un contrôleur d'un événement */
 export const removeController = controllerWrapper(async (req: Request, res: Response) => {
   const organizerId = req.user!.userId;
+  const role = req.user!.role;
   const { eventId, controllerId } = req.params;
 
   const event = await eventService.getEventById(eventId);
   if (!event) throw new AppError("Événement introuvable", StatusCodes.NOT_FOUND);
-  if (event.organizerId !== organizerId) throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
 
-  await eventControllerRepository.remove(eventId, controllerId);
+  const isAdmin = role === "admin" || role === "super_admin";
+  if (!isAdmin && event.organizerId !== organizerId) {
+    throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
+  }
+
+  try {
+    await eventControllerRepository.remove(eventId, controllerId);
+  } catch (err: any) {
+    throw new AppError(err.message || "Affectation introuvable", StatusCodes.NOT_FOUND);
+  }
+
   res.status(StatusCodes.OK).json(
     jsonResponse({ status: "success", message: "Contrôleur retiré" })
   );

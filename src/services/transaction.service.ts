@@ -278,7 +278,7 @@ export const transactionService = {
   /** Applique les effets sur le wallet lors d'une transition */
   async _appliquerEffetWallet(
     tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
-    transaction: { id: string; organizerId: string; netOrganisateur: number; refundAmount?: number | null },
+    transaction: { id: string; eventId: string; organizerId: string; netOrganisateur: number; refundAmount?: number | null },
     oldStatus: TransactionStatus,
     newStatus: TransactionStatus,
     options?: { refundAmount?: number }
@@ -325,6 +325,15 @@ export const transactionService = {
           checksum: checksumLedger,
         },
       });
+
+      // Déduire automatiquement le coût d'une promotion "sur les ventes" si en attente
+      await transactionService._deduirePromotionSurVente(
+        tx,
+        transaction.eventId,
+        transaction.organizerId,
+        wallet.id,
+        wallet.soldeDisponible + net
+      );
     }
 
     if (newStatus === "refunded" && oldStatus !== "pending") {
@@ -388,6 +397,74 @@ export const transactionService = {
         },
       });
     }
+  },
+
+  /** Déduit automatiquement le coût d'une promotion "sur les ventes" du wallet */
+  async _deduirePromotionSurVente(
+    tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+    eventId: string,
+    organizerId: string,
+    walletId: string,
+    soldeApresCredit: number
+  ) {
+    const promo = await tx.promotionPurchase.findFirst({
+      where: {
+        eventId,
+        organizerId,
+        paymentMode: "on_sales",
+        paymentStatus: "pending",
+      },
+    });
+    if (!promo) return;
+
+    const restant = promo.pricePaid - promo.amountDeducted;
+    const toDeduct = Math.min(restant, soldeApresCredit);
+    if (toDeduct <= 0) return;
+
+    const newAmountDeducted = promo.amountDeducted + toDeduct;
+    const isFullyPaid = newAmountDeducted >= promo.pricePaid;
+
+    await tx.wallet.update({
+      where: { id: walletId },
+      data: {
+        soldeDisponible: { decrement: toDeduct },
+        soldeRetirable: { decrement: toDeduct },
+        soldeTotal: { decrement: toDeduct },
+        version: { increment: 1 },
+      },
+    });
+
+    const checksumPromo = genererChecksum({
+      walletId,
+      type: "promotion_deduction",
+      amount: toDeduct,
+      promoId: promo.id,
+      ts: new Date().toISOString(),
+    });
+
+    await tx.walletLedger.create({
+      data: {
+        walletId,
+        entryType: "debit",
+        operationType: "promotion_deduction",
+        amount: toDeduct,
+        balanceBefore: soldeApresCredit,
+        balanceAfter: soldeApresCredit - toDeduct,
+        description: `Déduction promotion ${promo.packType} (sur ventes) — événement ${eventId}`,
+        referenceId: promo.id,
+        referenceType: "promotion",
+        checksum: checksumPromo,
+      },
+    });
+
+    await tx.promotionPurchase.update({
+      where: { id: promo.id },
+      data: {
+        amountDeducted: newAmountDeducted,
+        paymentStatus: isFullyPaid ? "deducted" : "pending",
+        status: isFullyPaid ? "completed" : "pending_payment",
+      },
+    });
   },
 
   async getTransactionById(id: string, userId: string, userRole: string) {

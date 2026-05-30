@@ -10,6 +10,7 @@ import { StatusCodes } from "http-status-codes";
 import QRCode from "qrcode";
 import { paymentService } from "../services/payment.service.js";
 import { ticketService } from "../services/ticket.service.js";
+import { transactionService } from "../services/transaction.service.js";
 import { addEmailJob } from "../queues/email.queue.js";
 import { controllerWrapper } from "../utils/ControllerWrapper.js";
 import { jsonResponse } from "../utils/response.js";
@@ -160,6 +161,46 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
       return { ...ticket, qrDataUrl };
     })
   );
+
+  // 3b. Créer les transactions financières pour chaque billet (non bloquant sur erreur)
+  if (purchaseResult.organizerId && purchaseResult.tickets.length > 0) {
+    const actor = {
+      id: userId,
+      role: "user",
+      ip: req.ip,
+      userAgent: req.headers["user-agent"] as string | undefined,
+    };
+    Promise.all(
+      purchaseResult.tickets.map(async (ticket: any) => {
+        const prixTTCCentimes = Math.round((ticket.price ?? 0) * 100);
+        if (prixTTCCentimes <= 0) return; // billet gratuit — pas de transaction financière
+        try {
+          const tx = await transactionService.creerTransaction({
+            idempotencyKey: `${purchaseResult.orderId}-${ticket.id}`,
+            eventId,
+            organizerId: purchaseResult.organizerId,
+            buyerId: userId,
+            ticketId: ticket.id,
+            prixTTCCentimes,
+            devise: "XOF",
+            paymentMethod: paymentProvider,
+            metadata: { orderId: purchaseResult.orderId, provider: paymentProvider, paymentId },
+            actorIp: req.ip,
+            actorUserAgent: req.headers["user-agent"] as string | undefined,
+          });
+          // State machine : pending → processing → paid → completed
+          await transactionService.changerStatut(tx.id, "processing", actor, { reason: "Paiement initié" });
+          await transactionService.changerStatut(tx.id, "paid", actor, {
+            reason: "Paiement confirmé",
+            paymentProviderTransactionId: paymentId,
+          });
+          await transactionService.changerStatut(tx.id, "completed", actor, { reason: "Transaction finalisée" });
+        } catch {
+          // L'erreur de transaction ne bloque pas la livraison du billet
+        }
+      })
+    ).catch(() => {});
+  }
 
   // 4. Envoyer email de confirmation (non bloquant)
   const totalAmount = items.reduce(

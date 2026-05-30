@@ -176,14 +176,33 @@ export const getNextSlotRelease = controllerWrapper(async (req: Request, res: Re
 
 // ─── POST /api/events/:id/promote ────────────────────────────────────────────
 // Organisateur self-service : achète un pack promotionnel pour son événement
+// Body: { packType, paymentMode: "immediate"|"on_sales", paymentProvider?, paymentRef?, paymentSimulated? }
 export const purchaseEventPromotion = controllerWrapper(async (req: Request, res: Response) => {
   const eventId = String(req.params.id);
   const organizerId = req.user!.userId;
-  const { packType } = req.body as { packType: string };
+  const {
+    packType,
+    paymentMode = "immediate",
+    paymentProvider,
+    paymentRef,
+    paymentSimulated = false,
+  } = req.body as {
+    packType: string;
+    paymentMode?: "immediate" | "on_sales";
+    paymentProvider?: string;
+    paymentRef?: string;
+    paymentSimulated?: boolean;
+  };
 
   const validTypes = ["OR", "ARGENT", "BRONZE", "LITE"];
   if (!validTypes.includes(packType)) {
     throw new AppError("Type de pack invalide (OR | ARGENT | BRONZE | LITE)", StatusCodes.BAD_REQUEST);
+  }
+  if (!["immediate", "on_sales"].includes(paymentMode)) {
+    throw new AppError("paymentMode invalide (immediate | on_sales)", StatusCodes.BAD_REQUEST);
+  }
+  if (paymentMode === "immediate" && !paymentSimulated && !paymentRef) {
+    throw new AppError("paymentRef requis pour un paiement immédiat", StatusCodes.BAD_REQUEST);
   }
 
   // Vérifier ownership
@@ -231,7 +250,7 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
     );
   }
 
-  // Récupérer la config du pack (avec fallback sur les defaults)
+  // Récupérer la config du pack
   await ensurePackConfigs();
   const cfg = await prisma.promotionPackConfig.findUnique({ where: { type: packType } });
   if (!cfg) throw new AppError("Configuration du pack introuvable", StatusCodes.INTERNAL_SERVER_ERROR);
@@ -241,7 +260,11 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
   const endDate = new Date(now);
   endDate.setDate(endDate.getDate() + cfg.durationDays);
 
-  // Transaction : créer le PromotionPurchase + mettre à jour l'Event
+  // Déterminer le statut selon le mode de paiement
+  const purchaseStatus = paymentMode === "on_sales" ? "pending_payment" : "completed";
+  const paymentStatus  = paymentMode === "on_sales" ? "pending"          : "completed";
+
+  // Transaction ACID : créer le PromotionPurchase + activer l'Event
   const [purchase] = await prisma.$transaction([
     prisma.promotionPurchase.create({
       data: {
@@ -250,12 +273,17 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
         packType,
         pricePaid: cfg.price,
         currency: cfg.currency,
-        status: "completed",
-        paymentSimulated: true,
+        status: purchaseStatus,
+        paymentMode,
+        paymentStatus,
+        paymentProvider: paymentProvider ?? null,
+        paymentSimulated,
+        paymentRef: paymentRef ?? null,
         promotionStartDate: startDate,
         promotionEndDate: endDate,
       },
     }),
+    // Dans les deux cas l'événement est mis en avant immédiatement
     prisma.event.update({
       where: { id: eventId },
       data: {
@@ -267,14 +295,20 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
     }),
   ]);
 
+  const modeLabel = paymentMode === "on_sales"
+    ? "Pack activé — coût déduit automatiquement sur les ventes de billets"
+    : `Pack ${packType} activé avec succès`;
+
   res.status(StatusCodes.CREATED).json(jsonResponse({
     status: "success",
-    message: `Pack ${packType} activé avec succès`,
+    message: modeLabel,
     data: {
       purchaseId: purchase.id,
       packType,
       pricePaid: cfg.price,
       currency: cfg.currency,
+      paymentMode,
+      paymentStatus,
       promotionStartDate: startDate,
       promotionEndDate: endDate,
       durationDays: cfg.durationDays,

@@ -45,7 +45,8 @@ export const eventRepository = {
     return events.map(({ _count, transactions, ...e }) => ({
       ...e,
       attendees: _count.tickets,
-      totalRevenue: transactions.reduce((sum, t) => sum + t.netOrganisateur, 0),
+      // netOrganisateur est stocké en centimes → convertir en FCFA (÷100)
+      totalRevenue: Math.round(transactions.reduce((sum, t) => sum + t.netOrganisateur, 0) / 100),
     }));
   },
 

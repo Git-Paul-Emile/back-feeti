@@ -189,9 +189,13 @@ model PromotionPurchase {
   packType           String   // OR | ARGENT | BRONZE | LITE
   pricePaid          Int      // prix snapshot au moment de l'achat (FCFA)
   currency           String   @default("FCFA")
-  status             String   @default("completed") // completed | cancelled | refunded
-  paymentSimulated   Boolean  @default(true)
-  paymentRef         String?  // référence paiement réel (futur)
+  status             String   @default("completed") // completed | cancelled | refunded | pending_payment
+  paymentMode        String   @default("immediate")  // immediate | on_sales
+  paymentStatus      String   @default("pending")    // pending | completed | failed | deducted
+  paymentProvider    String?                          // stripe | mobile_money | paystack
+  paymentSimulated   Boolean  @default(false)
+  paymentRef         String?  // référence paiement
+  amountDeducted     Int      @default(0)             // montant déjà déduit des ventes (mode on_sales)
   promotionStartDate DateTime
   promotionEndDate   DateTime
   deactivatedAt      DateTime?
@@ -204,6 +208,7 @@ model PromotionPurchase {
   @@index([eventId])
   @@index([packType])
   @@index([status])
+  @@index([paymentMode])
   @@index([createdAt])
 }
 
@@ -482,6 +487,7 @@ enum LedgerOperationType {
   payout               // Versement à l'organisateur
   dispute_hold         // Blocage pour litige
   dispute_release      // Libération après litige
+  promotion_deduction  // Déduction coût promotion sur les ventes
   adjustment           // Ajustement manuel admin
 }
 

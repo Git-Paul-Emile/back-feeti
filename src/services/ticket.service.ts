@@ -123,7 +123,7 @@ export const ticketService = {
     // Update attendees count
     await eventRepository.update(data.eventId, { attendees: event.attendees + totalQty });
 
-    return { orderId, tickets, deliveryFee };
+    return { orderId, tickets, deliveryFee, organizerId: event.organizerId };
   },
 
   async getMyTickets(userId: string) {
