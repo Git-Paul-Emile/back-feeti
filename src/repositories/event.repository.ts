@@ -33,7 +33,7 @@ export const eventRepository = {
     });
   },
 
-  async findAll(countryCode?: string, featuredOnly?: boolean, interests?: string[]) {
+  async findAll(countryCode?: string, interests?: string[]) {
     const now = new Date();
 
     const events = await prisma.event.findMany({
@@ -41,7 +41,6 @@ export const eventRepository = {
         status: "published",
         isLive: false,
         ...(countryCode ? { countryCode } : {}),
-        ...(featuredOnly ? { isFeatured: true } : {}),
       },
       include: { organizer: { select: { name: true } } },
       orderBy: { createdAt: "desc" },
@@ -111,7 +110,6 @@ export const eventRepository = {
     salesBlocked: boolean;
     attendees: number;
     isLive: boolean;
-    isFeatured: boolean;
     isFavorite: boolean;
     status: string;
     streamUrl: string;

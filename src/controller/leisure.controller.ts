@@ -75,7 +75,7 @@ export const createLeisureItem = controllerWrapper(async (req: Request, res: Res
   const {
     name, description, categorySlug, location, address, phone, website,
     priceRange, openingHours, image, rating, reviewCount, features, tags,
-    status, countryCode, isFeatured,
+    status, countryCode,
   } = req.body as Record<string, unknown>;
 
   if (!name || !description || !categorySlug || !location) {
@@ -102,7 +102,6 @@ export const createLeisureItem = controllerWrapper(async (req: Request, res: Res
     tags: tags ? String(tags) : '[]',
     status: status ? String(status) : 'published',
     countryCode: countryCode ? String(countryCode) : undefined,
-    isFeatured: Boolean(isFeatured),
     createdById: req.user!.userId,
   });
 
@@ -118,7 +117,7 @@ export const updateLeisureItem = controllerWrapper(async (req: Request, res: Res
   const {
     name, description, categorySlug, location, address, phone, website,
     priceRange, openingHours, image, rating, reviewCount, features, tags,
-    status, countryCode, isFeatured,
+    status, countryCode,
   } = req.body as Record<string, unknown>;
 
   const data: Parameters<typeof leisureRepository.update>[1] = {};
@@ -142,7 +141,6 @@ export const updateLeisureItem = controllerWrapper(async (req: Request, res: Res
   if (tags !== undefined) data.tags = String(tags);
   if (status !== undefined) data.status = String(status);
   if (countryCode !== undefined) data.countryCode = String(countryCode);
-  if (isFeatured !== undefined) data.isFeatured = Boolean(isFeatured);
 
   const updated = await leisureRepository.update(id, data);
   res.status(StatusCodes.OK).json(jsonResponse({ status: 'success', message: 'Loisir mis à jour', data: updated }));

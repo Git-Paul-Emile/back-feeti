@@ -333,6 +333,61 @@ export function templateEventReminder(data: {
   `);
 }
 
+export function templateEventApproved(data: { organizerName: string; eventTitle: string; eventDate: string; dashboardUrl: string }): string {
+  return baseLayout(`
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="display:inline-block;background:#dcfce7;border-radius:50%;padding:16px;margin-bottom:16px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+      </div>
+      <h2 style="margin:0;font-size:24px;font-weight:700;color:#111827;">Votre événement est publié !</h2>
+      <p style="margin:10px 0 0;color:#6b7280;font-size:16px;">Bonjour ${data.organizerName},</p>
+    </div>
+    <p style="color:#374151;font-size:15px;line-height:1.7;margin-bottom:24px;">
+      Bonne nouvelle ! Votre événement <strong>${data.eventTitle}</strong> prévu le <strong>${data.eventDate}</strong>
+      vient d'être approuvé par notre équipe. Il est maintenant visible par le public sur Féeti et les billets sont disponibles à la vente.
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${data.dashboardUrl}" style="display:inline-block;background:linear-gradient(135deg,#4338ca,#7c3aed);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:700;">
+        Voir mon tableau de bord
+      </a>
+    </div>
+    <p style="color:#9ca3af;font-size:13px;margin:0;text-align:center;">Merci de faire confiance à Féeti pour vos événements.</p>
+  `);
+}
+
+export function templateEventRejected(data: { organizerName: string; eventTitle: string; rejectionReason: string; dashboardUrl: string }): string {
+  return baseLayout(`
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="display:inline-block;background:#fee2e2;border-radius:50%;padding:16px;margin-bottom:16px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="15" y1="9" x2="9" y2="15"></line>
+          <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg>
+      </div>
+      <h2 style="margin:0;font-size:24px;font-weight:700;color:#111827;">Événement non approuvé</h2>
+      <p style="margin:10px 0 0;color:#6b7280;font-size:16px;">Bonjour ${data.organizerName},</p>
+    </div>
+    <p style="color:#374151;font-size:15px;line-height:1.7;margin-bottom:24px;">
+      Après examen, votre événement <strong>${data.eventTitle}</strong> n'a pas pu être approuvé pour la raison suivante :
+    </p>
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:20px;margin-bottom:28px;">
+      <p style="margin:0;color:#991b1b;font-size:15px;line-height:1.6;">${data.rejectionReason}</p>
+    </div>
+    <p style="color:#374151;font-size:15px;line-height:1.7;margin-bottom:24px;">
+      Vous pouvez corriger votre événement depuis votre tableau de bord et le soumettre à nouveau.
+    </p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="${data.dashboardUrl}" style="display:inline-block;background:linear-gradient(135deg,#4338ca,#7c3aed);color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:10px;font-size:16px;font-weight:700;">
+        Modifier mon événement
+      </a>
+    </div>
+    <p style="color:#9ca3af;font-size:13px;margin:0;text-align:center;">Pour toute question, contactez notre support.</p>
+  `);
+}
+
 // ─── Service singleton ─────────────────────────────────────────────────
 
 class EmailService {
@@ -395,6 +450,24 @@ class EmailService {
       subject: "Votre mot de passe Féeti a été modifié",
       html: templatePasswordChanged(data),
       text: `Bonjour ${data.userName}, votre mot de passe a été modifié. Si ce n'était pas vous, contactez-nous immédiatement.`,
+    });
+  }
+
+  async sendEventApproved(to: string, data: Parameters<typeof templateEventApproved>[0]): Promise<void> {
+    await this.provider.send({
+      to,
+      subject: `✅ Votre événement "${data.eventTitle}" a été approuvé !`,
+      html: templateEventApproved(data),
+      text: `Bonjour ${data.organizerName}, votre événement "${data.eventTitle}" a été approuvé et est maintenant visible sur Féeti.`,
+    });
+  }
+
+  async sendEventRejected(to: string, data: Parameters<typeof templateEventRejected>[0]): Promise<void> {
+    await this.provider.send({
+      to,
+      subject: `❌ Votre événement "${data.eventTitle}" n'a pas été approuvé`,
+      html: templateEventRejected(data),
+      text: `Bonjour ${data.organizerName}, votre événement "${data.eventTitle}" n'a pas été approuvé. Raison : ${data.rejectionReason}`,
     });
   }
 

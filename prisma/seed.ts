@@ -23,9 +23,10 @@ async function main() {
   const { organizer, admin } = await seedUsers(prisma);
   await seedEvents(prisma, organizer.id);
   await seedDealCategories(prisma);
-  await seedDeals(prisma, admin.id);
+  // Loisirs en premier — les deals y font référence via leisureItemId
   await seedLeisureCategories(prisma);
   await seedLeisureItems(prisma, admin.id);
+  await seedDeals(prisma, admin.id);
   await seedBlogCategories(prisma);
   await seedBlogPosts(prisma, admin.id);
   const zoneIdMap = await seedDeliveryZones(prisma);

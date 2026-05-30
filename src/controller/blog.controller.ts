@@ -77,12 +77,13 @@ export const deleteBlogCategory = controllerWrapper(async (req: Request, res: Re
 // ─── Blog Posts ───────────────────────────────────────────────────────────────
 
 export const getAllBlogPosts = controllerWrapper(async (req: Request, res: Response) => {
-  const { category, status, search, sort = "date", page = "1", limit = "12" } = req.query as Record<string, string>;
+  const { category, status, search, sort = "date", page = "1", limit = "12", isFeatured } = req.query as Record<string, string>;
 
   const where: any = {};
   if (category && category !== "all") where.categorySlug = category;
   if (status) where.status = status;
   else where.status = "published"; // public route only returns published
+  if (isFeatured === "true") where.isFeatured = true;
   if (search) {
     where.OR = [
       { title: { contains: search, mode: "insensitive" } },

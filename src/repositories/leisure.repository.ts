@@ -37,7 +37,6 @@ export interface LeisureItemCreateInput {
   tags?: string;
   status?: string;
   countryCode?: string;
-  isFeatured?: boolean;
   createdById: string;
 }
 
@@ -59,7 +58,7 @@ const leisureRepository = {
     const items = await prisma.leisureItem.findMany({
       where,
       include: { category: true },
-      orderBy: [{ isFeatured: 'desc' }, { createdAt: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }],
     });
 
     const now = new Date();

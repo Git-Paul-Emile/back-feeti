@@ -1,6 +1,28 @@
 import { PrismaClient } from '../../src/generated/prisma/client.js';
 
-const dealsData = [
+// leisureItemName : nom exact de l'établissement dans leisureSeeder.ts
+// undefined = pas de lien établissement
+const dealsData: Array<{
+  countryCode: string;
+  title: string;
+  description: string;
+  category: string;
+  originalPrice: number;
+  discountedPrice: number;
+  discount: number;
+  validUntil: string;
+  location: string;
+  image: string;
+  isPopular: boolean;
+  merchantName: string;
+  tags: string;
+  availableQuantity: number;
+  maxQuantity: number;
+  rating: number;
+  reviewCount: number;
+  status: string;
+  leisureItemName?: string;
+}> = [
 
   // ═══════════════════════════════════════════════════════════════
   //  🇨🇬  CONGO (CG)
@@ -24,6 +46,7 @@ const dealsData = [
     rating: 4.8,
     reviewCount: 127,
     status: 'published',
+    leisureItemName: 'Restaurant Le Jardin',
   },
   {
     countryCode: 'CG',
@@ -37,13 +60,14 @@ const dealsData = [
     location: 'Pointe-Noire',
     image: 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1080&q=80&fit=crop',
     isPopular: false,
-    merchantName: 'Spa Wellness Center',
+    merchantName: 'Zen Wellness Center',
     tags: JSON.stringify(['Spa', 'Relaxation', 'Bien-être']),
     availableQuantity: 12,
     maxQuantity: 50,
     rating: 4.6,
     reviewCount: 89,
     status: 'published',
+    leisureItemName: 'Zen Wellness Center',
   },
   {
     countryCode: 'CG',
@@ -64,6 +88,7 @@ const dealsData = [
     rating: 4.9,
     reviewCount: 234,
     status: 'published',
+    leisureItemName: 'Congo Safari Tours',
   },
   {
     countryCode: 'CG',
@@ -97,13 +122,14 @@ const dealsData = [
     location: 'Brazzaville - Poto-Poto',
     image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=1080&q=80&fit=crop',
     isPopular: false,
-    merchantName: 'Feeti Live',
+    merchantName: 'Rooftop Sky Lounge',
     tags: JSON.stringify(['Musique', 'Local', 'Exclusif']),
     availableQuantity: 25,
     maxQuantity: 50,
     rating: 4.5,
     reviewCount: 42,
     status: 'published',
+    leisureItemName: 'Rooftop Sky Lounge',
   },
   {
     countryCode: 'CG',
@@ -124,11 +150,12 @@ const dealsData = [
     rating: 4.8,
     reviewCount: 198,
     status: 'published',
+    leisureItemName: 'Hôtel Maya Maya',
   },
   {
     countryCode: 'CG',
     title: 'Shopping Spree Centre Commercial',
-    description: 'Bon d\'achat de 50 000 FCFA valable dans tous les magasins du centre commercial + parking gratuit.',
+    description: "Bon d'achat de 50 000 FCFA valable dans tous les magasins du centre commercial + parking gratuit.",
     category: 'shopping',
     originalPrice: 50000,
     discountedPrice: 40000,
@@ -168,6 +195,7 @@ const dealsData = [
     rating: 4.7,
     reviewCount: 165,
     status: 'published',
+    leisureItemName: 'Restaurant Chez Mama Jeanne',
   },
   {
     countryCode: 'CD',
@@ -208,6 +236,28 @@ const dealsData = [
     rating: 4.6,
     reviewCount: 312,
     status: 'published',
+    leisureItemName: 'Hôtel Fleuve Congo',
+  },
+  {
+    countryCode: 'CD',
+    title: 'Session Gaming VR & Tournoi',
+    description: "Passez 2h au Gaming Lounge avec accès réalité virtuelle et participation au tournoi hebdomadaire. Boissons offertes.",
+    category: 'activities',
+    originalPrice: 12000,
+    discountedPrice: 7800,
+    discount: 35,
+    validUntil: '2026-08-31',
+    location: 'Kinshasa - Ngaliema',
+    image: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=1080&q=80&fit=crop',
+    isPopular: true,
+    merchantName: 'Gaming Lounge Kinshasa',
+    tags: JSON.stringify(['Gaming', 'VR', 'Jeunes', 'Tournoi']),
+    availableQuantity: 20,
+    maxQuantity: 50,
+    rating: 4.4,
+    reviewCount: 78,
+    status: 'published',
+    leisureItemName: 'Gaming Lounge Kinshasa',
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -232,6 +282,7 @@ const dealsData = [
     rating: 4.9,
     reviewCount: 67,
     status: 'published',
+    leisureItemName: 'Gabon Dive Center',
   },
   {
     countryCode: 'GA',
@@ -245,13 +296,14 @@ const dealsData = [
     location: 'Libreville - Bord de Mer',
     image: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=1080&q=80&fit=crop',
     isPopular: false,
-    merchantName: "L'Estuaire Restaurant",
+    merchantName: 'Radisson Blu Libreville',
     tags: JSON.stringify(['Gastronomie', 'Vue mer', 'Romantic']),
     availableQuantity: 20,
     maxQuantity: 40,
     rating: 4.5,
     reviewCount: 93,
     status: 'published',
+    leisureItemName: 'Radisson Blu Libreville',
   },
   {
     countryCode: 'GA',
@@ -272,6 +324,27 @@ const dealsData = [
     rating: 5.0,
     reviewCount: 45,
     status: 'published',
+  },
+  {
+    countryCode: 'GA',
+    title: 'Soirée Bowling & Bar Galaxie',
+    description: "Partie de bowling illimitée (2h) + 1 cocktail offert au bar. Parfait pour une sortie entre amis ou en famille.",
+    category: 'activities',
+    originalPrice: 18000,
+    discountedPrice: 11700,
+    discount: 35,
+    validUntil: '2026-09-30',
+    location: 'Libreville',
+    image: 'https://images.unsplash.com/photo-1529494792912-8ae2f7e8e1e5?w=1080&q=80&fit=crop',
+    isPopular: false,
+    merchantName: 'Bowling Galaxie',
+    tags: JSON.stringify(['Bowling', 'Famille', 'Gabon', 'Sortie']),
+    availableQuantity: 30,
+    maxQuantity: 60,
+    rating: 4.3,
+    reviewCount: 112,
+    status: 'published',
+    leisureItemName: 'Bowling Galaxie',
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -316,6 +389,7 @@ const dealsData = [
     rating: 4.8,
     reviewCount: 221,
     status: 'published',
+    leisureItemName: 'Le Maquis du Plateau',
   },
   {
     countryCode: 'CI',
@@ -337,20 +411,84 @@ const dealsData = [
     reviewCount: 158,
     status: 'published',
   },
+  {
+    countryCode: 'CI',
+    title: 'Soirée Afrobeats VIP + Table',
+    description: "Entrée VIP + table réservée pour 4 personnes au Club Afrobeats Abidjan. Service bouteille inclus. Dress code obligatoire.",
+    category: 'general',
+    originalPrice: 80000,
+    discountedPrice: 56000,
+    discount: 30,
+    validUntil: '2026-08-31',
+    location: 'Abidjan - Marcory',
+    image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=1080&q=80&fit=crop',
+    isPopular: true,
+    merchantName: 'Club Afrobeats Abidjan',
+    tags: JSON.stringify(['Nuit', 'VIP', 'Afrobeats', 'Club']),
+    availableQuantity: 8,
+    maxQuantity: 20,
+    rating: 4.6,
+    reviewCount: 445,
+    status: 'published',
+    leisureItemName: 'Club Afrobeats Abidjan',
+  },
+  {
+    countryCode: 'CI',
+    title: 'Abonnement Fitness 1 Mois',
+    description: "1 mois d'accès illimité au FitLife Club : salle de cardio, musculation, cours collectifs yoga et zumba. Bilan fitness offert.",
+    category: 'activities',
+    originalPrice: 30000,
+    discountedPrice: 19500,
+    discount: 35,
+    validUntil: '2026-09-30',
+    location: 'Abidjan - Cocody',
+    image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=1080&q=80&fit=crop',
+    isPopular: false,
+    merchantName: 'FitLife Club',
+    tags: JSON.stringify(['Fitness', 'Sport', 'Santé', 'Coaching']),
+    availableQuantity: 25,
+    maxQuantity: 50,
+    rating: 4.5,
+    reviewCount: 134,
+    status: 'published',
+    leisureItemName: 'FitLife Club',
+  },
 ];
 
 export async function seedDeals(prisma: PrismaClient, adminId: string) {
   await prisma.deal.deleteMany({ where: { createdById: adminId } });
 
+  // Charger tous les loisirs pour faire les liens
+  const allLeisure = await prisma.leisureItem.findMany({ select: { id: true, name: true, location: true, image: true } });
+  const leisureByName = new Map(allLeisure.map(li => [li.name, li]));
+
   let count = 0;
-  for (const deal of dealsData) {
-    await prisma.deal.create({ data: { ...deal, createdById: adminId } });
+  let linked = 0;
+
+  for (const { leisureItemName, ...dealFields } of dealsData) {
+    const leisure = leisureItemName ? leisureByName.get(leisureItemName) : undefined;
+
+    await prisma.deal.create({
+      data: {
+        ...dealFields,
+        createdById: adminId,
+        ...(leisure ? {
+          leisureItemId: leisure.id,
+          // Auto-aligner location et image sur l'établissement lié
+          location: leisure.location,
+          image: dealFields.image ?? leisure.image ?? undefined,
+        } : {}),
+      },
+    });
+
     count++;
+    if (leisure) linked++;
   }
 
   const byCountry: Record<string, number> = {};
   dealsData.forEach(d => { byCountry[d.countryCode] = (byCountry[d.countryCode] ?? 0) + 1; });
-  console.log(`✅ ${count} bons plans créés :`);
+
+  console.log(`✅ ${count} bons plans créés (${linked} liés à un établissement) :`);
   for (const [code, n] of Object.entries(byCountry)) {
     console.log(`   • ${code} — ${n} bons plans`);
   }

@@ -24,7 +24,6 @@ export const getMyEvents = controllerWrapper(async (req: Request, res: Response)
 
 export const getAllEvents = controllerWrapper(async (req: Request, res: Response) => {
   const countryCode = req.query.country ? String(req.query.country).toUpperCase() : undefined;
-  const featuredOnly = req.query.featured === "true";
 
   // Récupérer les intérêts de l'utilisateur connecté (auth optionnelle)
   let interests: string[] | undefined;
@@ -40,7 +39,7 @@ export const getAllEvents = controllerWrapper(async (req: Request, res: Response
     }
   }
 
-  const events = await eventService.getAllEvents(countryCode, featuredOnly, interests);
+  const events = await eventService.getAllEvents(countryCode, interests);
   res.status(StatusCodes.OK).json(
     jsonResponse({ status: "success", message: "Événements récupérés", data: events })
   );

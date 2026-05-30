@@ -32,7 +32,6 @@ function mapSyncedLiveEvent(event: Awaited<ReturnType<typeof feetiPlaySyncServic
     salesBlocked: false,
     isLive: event.isLive,
     eventType: "STREAMING_LIVE" as const,
-    isFeatured: event.isFeatured,
     isFavorite: false,
     status: event.isLive ? "published" : "completed",
     streamUrl: event.streamUrl ?? undefined,
@@ -102,21 +101,11 @@ export const eventService = {
     }
 
     // Présentiel / Mixte: l'événement existe dans Feeti2 (PostgreSQL).
-    const { featuredHomepage, ...eventData } = data;
     const event = await eventRepository.create({
-      ...eventData,
+      ...data,
       eventType: targetEventType,
       isLive: targetEventType === "MIXTE" ? true : !!data.isLive,
     });
-
-    // Si l'organisateur a coché "Mise en avant", créer automatiquement la demande
-    if (featuredHomepage) {
-      await prisma.featuredRequest.create({
-        data: { eventId: event.id, organizerId: data.organizerId },
-      }).catch((err) => {
-        logger.error(`Erreur création FeaturedRequest pour event ${event.id}:`, err);
-      });
-    }
 
     // Synchroniser dans Firestore
     await firestoreSyncService.syncEvent(event).catch((err) => {
@@ -139,7 +128,7 @@ export const eventService = {
         image: event.image,
         category: event.category,
         isLive: true,
-        isFeatured: event.isFeatured ?? false,
+        isFeatured: false,
         streamUrl: event.streamUrl ?? undefined,
         videoUrl: event.videoUrl ?? undefined,
         price: event.price,
@@ -169,8 +158,8 @@ export const eventService = {
     ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   },
 
-  async getAllEvents(countryCode?: string, featuredOnly?: boolean, interests?: string[]) {
-    return eventRepository.findAll(countryCode, featuredOnly, interests);
+  async getAllEvents(countryCode?: string, interests?: string[]) {
+    return eventRepository.findAll(countryCode, interests);
   },
 
   async getEventById(id: string) {
@@ -287,7 +276,6 @@ export const eventService = {
       maxAttendees: number;
       duration: string;
       isLive: boolean;
-      isFeatured: boolean;
       streamUrl: string;
       videoUrl: string;
       status: string;
@@ -344,7 +332,7 @@ export const eventService = {
         image: data.image ?? event.image,
         category: data.category ?? event.category,
         isLive: data.isLive ?? event.isLive,
-        isFeatured: data.isFeatured ?? event.isFeatured,
+        isFeatured: false,
         streamUrl: data.streamUrl ?? event.streamUrl ?? undefined,
         videoUrl: data.videoUrl ?? event.videoUrl ?? undefined,
         price: data.price ?? event.price,
@@ -394,7 +382,7 @@ export const eventService = {
         image: data.image ?? event.image,
         category: data.category ?? event.category,
         isLive: true,
-        isFeatured: data.isFeatured ?? event.isFeatured ?? false,
+        isFeatured: false,
         streamUrl: data.streamUrl ?? event.streamUrl ?? undefined,
         videoUrl: data.videoUrl ?? event.videoUrl ?? undefined,
         price: data.price ?? event.price,
@@ -430,7 +418,7 @@ export const eventService = {
         image: updated.image,
         category: updated.category,
         isLive: updated.isLive,
-        isFeatured: updated.isFeatured ?? false,
+        isFeatured: false,
         streamUrl: updated.streamUrl ?? undefined,
         videoUrl: updated.videoUrl ?? undefined,
         price: updated.price,

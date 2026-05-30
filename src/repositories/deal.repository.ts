@@ -8,6 +8,7 @@ export interface DealFilters {
   priceRange?: 'low' | 'medium' | 'high';
   sortBy?: 'popularity' | 'discount-high' | 'discount-low' | 'price-low' | 'price-high' | 'ending-soon' | 'name';
   countryCode?: string;
+  leisureItemId?: string;
   page?: number;
   limit?: number;
 }
@@ -34,12 +35,23 @@ export interface DealCreateInput {
   contactWebsite?: string;
   status?: string;
   countryCode?: string;
+  leisureItemId?: string;
   createdById: string;
 }
 
+const leisureItemSelect = {
+  id: true,
+  name: true,
+  image: true,
+  address: true,
+  location: true,
+  phone: true,
+  website: true,
+} as const;
+
 const dealRepository = {
   async findAll(filters: DealFilters = {}) {
-    const { search, category, location, discountRange, priceRange, sortBy = 'popularity', countryCode, page = 1, limit = 12 } = filters;
+    const { search, category, location, discountRange, priceRange, sortBy = 'popularity', countryCode, leisureItemId, page = 1, limit = 12 } = filters;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = { status: 'published' };
@@ -47,6 +59,7 @@ const dealRepository = {
     if (countryCode) where.countryCode = countryCode;
     if (category && category !== 'all') where.category = category;
     if (location && location !== 'all') where.location = location;
+    if (leisureItemId) where.leisureItemId = leisureItemId;
 
     if (discountRange === 'low') {
       where.discount = { lte: 25 };
@@ -76,7 +89,7 @@ const dealRepository = {
     const orderBy = buildOrderBy(sortBy);
 
     const [deals, total] = await Promise.all([
-      prisma.deal.findMany({ where, orderBy, skip, take: limit }),
+      prisma.deal.findMany({ where, orderBy, skip, take: limit, include: { leisureItem: { select: leisureItemSelect } } }),
       prisma.deal.count({ where }),
     ]);
 
@@ -86,20 +99,43 @@ const dealRepository = {
   async findAllAdmin() {
     return prisma.deal.findMany({
       orderBy: { createdAt: 'desc' },
-      include: { createdBy: { select: { id: true, name: true, email: true } } },
+      include: {
+        createdBy: { select: { id: true, name: true, email: true } },
+        leisureItem: { select: leisureItemSelect },
+      },
     });
   },
 
   async findById(id: string) {
-    return prisma.deal.findUnique({ where: { id } });
+    return prisma.deal.findUnique({
+      where: { id },
+      include: { leisureItem: { select: leisureItemSelect } },
+    });
+  },
+
+  async findByLeisureItemId(leisureItemId: string, onlyPublished = true) {
+    const where: Record<string, unknown> = { leisureItemId };
+    if (onlyPublished) where.status = 'published';
+    return prisma.deal.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: { leisureItem: { select: leisureItemSelect } },
+    });
   },
 
   async create(data: DealCreateInput) {
-    return prisma.deal.create({ data });
+    return prisma.deal.create({
+      data,
+      include: { leisureItem: { select: leisureItemSelect } },
+    });
   },
 
   async update(id: string, data: Partial<Omit<DealCreateInput, 'createdById'>>) {
-    return prisma.deal.update({ where: { id }, data });
+    return prisma.deal.update({
+      where: { id },
+      data,
+      include: { leisureItem: { select: leisureItemSelect } },
+    });
   },
 
   async delete(id: string) {

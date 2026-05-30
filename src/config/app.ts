@@ -26,6 +26,8 @@ import liveEventConsentRouter from "../routes/liveEventConsent.routes.js";
 import paymentRouter from "../routes/payment.routes.js";
 import accessRouter from "../routes/access.routes.js";
 import chatbotRouter from "../routes/chatbot.routes.js";
+import promotionRouter from "../routes/promotion.routes.js";
+import establishmentRouter from "../routes/establishment.routes.js";
 
 const app = express();
 
@@ -105,6 +107,10 @@ app.use('/api/payments', paymentRouter);
 app.use('/api/access', accessRouter);
 // ─── Chatbot Dialogflow ───────────────────────────────────────────────────────
 app.use('/api/chatbot', chatbotRouter);
+// ─── Promotions self-service ──────────────────────────────────────────────────
+app.use('/api/promotion', promotionRouter);
+// ─── Espace propriétaires d'établissement ────────────────────────────────────
+app.use('/api/establishment', establishmentRouter);
 
 // Middleware pour routes non trouvées
 app.use((_req, res) => {

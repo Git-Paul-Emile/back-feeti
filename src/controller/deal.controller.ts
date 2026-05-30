@@ -5,12 +5,13 @@ import { AppError } from '../utils/AppError.js';
 import { jsonResponse } from '../utils/response.js';
 import { controllerWrapper } from '../utils/ControllerWrapper.js';
 import { dealRepository, type DealFilters } from '../repositories/deal.repository.js';
+import { prisma } from '../config/database.js';
 
 // GET /api/deals
 export const getAllDeals = controllerWrapper(async (req: Request, res: Response) => {
   const {
     search, category, location, discountRange, priceRange, sortBy, countryCode,
-    page, limit,
+    leisureItemId, page, limit,
   } = req.query as Record<string, string | undefined>;
 
   const filters: DealFilters = {
@@ -21,6 +22,7 @@ export const getAllDeals = controllerWrapper(async (req: Request, res: Response)
     priceRange: priceRange as DealFilters['priceRange'],
     sortBy: sortBy as DealFilters['sortBy'],
     countryCode,
+    leisureItemId,
     page: page ? Number(page) : 1,
     limit: limit ? Math.min(Number(limit), 50) : 12,
   };
@@ -44,6 +46,13 @@ export const getDealLocations = controllerWrapper(async (req: Request, res: Resp
   res.status(StatusCodes.OK).json(jsonResponse({ status: 'success', message: 'Lieux récupérés', data: locations }));
 });
 
+// GET /api/deals/establishment/:leisureItemId
+export const getDealsByEstablishment = controllerWrapper(async (req: Request, res: Response) => {
+  const leisureItemId = String(req.params.leisureItemId);
+  const deals = await dealRepository.findByLeisureItemId(leisureItemId, true);
+  res.status(StatusCodes.OK).json(jsonResponse({ status: 'success', message: 'Bons plans récupérés', data: deals }));
+});
+
 // GET /api/deals/:id
 export const getDealById = controllerWrapper(async (req: Request, res: Response) => {
   const id = String(req.params.id);
@@ -58,11 +67,24 @@ export const createDeal = controllerWrapper(async (req: Request, res: Response) 
     title, description, category, originalPrice, discountedPrice, discount,
     validUntil, location, image, isPopular, merchantName, tags,
     availableQuantity, maxQuantity, rating, reviewCount, status, countryCode,
-    contactPhone, contactEmail, contactWebsite,
+    contactPhone, contactEmail, contactWebsite, leisureItemId,
   } = req.body as Record<string, unknown>;
 
+  let resolvedMerchantName = merchantName ? String(merchantName) : '';
+  let resolvedLocation = location ? String(location) : '';
+  let resolvedImage = image ? String(image) : '';
+
+  if (leisureItemId) {
+    const item = await prisma.leisureItem.findUnique({ where: { id: String(leisureItemId) } });
+    if (item) {
+      if (!resolvedMerchantName) resolvedMerchantName = item.name;
+      if (!resolvedLocation) resolvedLocation = item.location;
+      if (!resolvedImage) resolvedImage = item.image;
+    }
+  }
+
   if (!title || !description || !category || originalPrice === undefined || discountedPrice === undefined
-      || discount === undefined || !validUntil || !location || !merchantName) {
+      || discount === undefined || !validUntil || !resolvedLocation || !resolvedMerchantName) {
     throw new AppError('Champs obligatoires manquants', StatusCodes.BAD_REQUEST);
   }
 
@@ -74,10 +96,10 @@ export const createDeal = controllerWrapper(async (req: Request, res: Response) 
     discountedPrice: Number(discountedPrice),
     discount: Number(discount),
     validUntil: String(validUntil),
-    location: String(location),
-    image: image ? String(image) : '',
+    location: resolvedLocation,
+    image: resolvedImage,
     isPopular: Boolean(isPopular),
-    merchantName: String(merchantName),
+    merchantName: resolvedMerchantName,
     tags: tags ? String(tags) : '[]',
     availableQuantity: availableQuantity !== undefined ? Number(availableQuantity) : undefined,
     maxQuantity: maxQuantity !== undefined ? Number(maxQuantity) : undefined,
@@ -88,6 +110,7 @@ export const createDeal = controllerWrapper(async (req: Request, res: Response) 
     contactWebsite: contactWebsite ? String(contactWebsite) : undefined,
     status: status ? String(status) : 'published',
     countryCode: countryCode ? String(countryCode) : undefined,
+    leisureItemId: leisureItemId ? String(leisureItemId) : undefined,
     createdById: req.user!.userId,
   });
 
@@ -104,7 +127,7 @@ export const updateDeal = controllerWrapper(async (req: Request, res: Response) 
     title, description, category, originalPrice, discountedPrice, discount,
     validUntil, location, image, isPopular, merchantName, tags,
     availableQuantity, maxQuantity, rating, reviewCount, status, countryCode,
-    contactPhone, contactEmail, contactWebsite,
+    contactPhone, contactEmail, contactWebsite, leisureItemId,
   } = req.body as Record<string, unknown>;
 
   const data: Parameters<typeof dealRepository.update>[1] = {};
@@ -115,10 +138,7 @@ export const updateDeal = controllerWrapper(async (req: Request, res: Response) 
   if (discountedPrice !== undefined) data.discountedPrice = Number(discountedPrice);
   if (discount !== undefined) data.discount = Number(discount);
   if (validUntil !== undefined) data.validUntil = String(validUntil);
-  if (location !== undefined) data.location = String(location);
-  if (image !== undefined) data.image = String(image);
   if (isPopular !== undefined) data.isPopular = Boolean(isPopular);
-  if (merchantName !== undefined) data.merchantName = String(merchantName);
   if (tags !== undefined) data.tags = String(tags);
   if (availableQuantity !== undefined) data.availableQuantity = Number(availableQuantity);
   if (maxQuantity !== undefined) data.maxQuantity = Number(maxQuantity);
@@ -129,6 +149,21 @@ export const updateDeal = controllerWrapper(async (req: Request, res: Response) 
   if (contactWebsite !== undefined) data.contactWebsite = contactWebsite ? String(contactWebsite) : null;
   if (status !== undefined) data.status = String(status);
   if (countryCode !== undefined) data.countryCode = String(countryCode);
+  if (leisureItemId !== undefined) data.leisureItemId = leisureItemId ? String(leisureItemId) : null;
+
+  // Auto-remplir depuis LeisureItem si sélectionné
+  if (leisureItemId) {
+    const item = await prisma.leisureItem.findUnique({ where: { id: String(leisureItemId) } });
+    if (item) {
+      if (!data.merchantName && merchantName === undefined) data.merchantName = item.name;
+      if (!data.location && location === undefined) data.location = item.location;
+      if (!data.image && image === undefined) data.image = item.image;
+    }
+  }
+
+  if (merchantName !== undefined) data.merchantName = String(merchantName);
+  if (location !== undefined) data.location = String(location);
+  if (image !== undefined) data.image = String(image);
 
   const updated = await dealRepository.update(id, data);
   res.status(StatusCodes.OK).json(jsonResponse({ status: 'success', message: 'Bon plan mis à jour', data: updated }));

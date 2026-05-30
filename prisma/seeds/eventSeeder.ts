@@ -15,7 +15,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1731427442377-e531ddf62066?w=1080&q=80&fit=crop',
     price: 15000, currency: 'FCFA', category: 'Musique',
     maxAttendees: 3000, attendees: 1250,
-    isLive: true, isFeatured: true, isFavorite: false, status: 'published',
+    isLive: true, isFavorite: false, status: 'published',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
   },
   {
@@ -27,7 +27,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1723450486856-fe8102d0f1c9?w=1080&q=80&fit=crop',
     price: 12000, currency: 'FCFA', category: 'Jazz',
     maxAttendees: 800, attendees: 320,
-    isLive: true, isFeatured: false, isFavorite: true, status: 'published',
+    isLive: true, isFavorite: true, status: 'published',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
   },
   {
@@ -39,7 +39,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1539964604210-db87088e0c2c?w=1080&q=80&fit=crop',
     price: 18000, currency: 'FCFA', category: 'Art & Culture',
     maxAttendees: 1200, attendees: 450,
-    isLive: true, isFeatured: true, isFavorite: false, status: 'published',
+    isLive: true, isFavorite: false, status: 'published',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
   },
   {
@@ -51,7 +51,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1080&q=80&fit=crop',
     price: 12000, currency: 'FCFA', category: 'Musique',
     maxAttendees: 800, attendees: 450,
-    isLive: false, isFeatured: true, isFavorite: true, status: 'published',
+    isLive: false, isFavorite: true, status: 'published',
   },
   {
     countryCode: 'CG',
@@ -62,7 +62,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1465847734447-7e6c4553ddb4?w=1080&q=80&fit=crop',
     price: 30000, currency: 'FCFA', category: 'Musique',
     maxAttendees: 200, attendees: 120,
-    isLive: false, isFeatured: true, isFavorite: false, status: 'published',
+    isLive: false, isFavorite: false, status: 'published',
   },
   {
     countryCode: 'CG',
@@ -73,7 +73,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1527224538127-2104bb71c51b?w=1080&q=80&fit=crop',
     price: 20000, currency: 'FCFA', category: 'Humour',
     maxAttendees: 300, attendees: 210,
-    isLive: false, isFeatured: false, isFavorite: true, status: 'published',
+    isLive: false, isFavorite: true, status: 'published',
   },
   {
     countryCode: 'CG',
@@ -84,7 +84,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1476480862126-209bfaa8edc8?w=1080&q=80&fit=crop',
     price: 5000, currency: 'FCFA', category: 'Sport',
     maxAttendees: 2000, attendees: 850,
-    isLive: false, isFeatured: false, isFavorite: true, status: 'published',
+    isLive: false, isFavorite: true, status: 'published',
   },
   {
     countryCode: 'CG',
@@ -95,7 +95,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=1080&q=80&fit=crop',
     price: 10000, currency: 'FCFA', category: 'Musique',
     maxAttendees: 600, attendees: 420,
-    isLive: false, isFeatured: false, isFavorite: false, status: 'published',
+    isLive: false, isFavorite: false, status: 'published',
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -110,7 +110,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=1080&q=80&fit=crop',
     price: 20000, currency: 'CDF', category: 'Jazz',
     maxAttendees: 1000, attendees: 480,
-    isLive: true, isFeatured: true, isFavorite: false, status: 'published',
+    isLive: true, isFavorite: false, status: 'published',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
   },
   {
@@ -122,7 +122,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1080&q=80&fit=crop',
     price: 15000, currency: 'CDF', category: 'Musique',
     maxAttendees: 10000, attendees: 5200,
-    isLive: false, isFeatured: true, isFavorite: true, status: 'published',
+    isLive: false, isFavorite: true, status: 'published',
   },
   {
     countryCode: 'CD',
@@ -133,7 +133,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1582192904915-d89c7250b235?w=1080&q=80&fit=crop',
     price: 25000, currency: 'CDF', category: 'Conférence',
     maxAttendees: 800, attendees: 310,
-    isLive: false, isFeatured: false, isFavorite: false, status: 'published',
+    isLive: false, isFavorite: false, status: 'published',
   },
   {
     countryCode: 'CD',
@@ -144,7 +144,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=1080&q=80&fit=crop',
     price: 10000, currency: 'CDF', category: 'Musique',
     maxAttendees: 2000, attendees: 780,
-    isLive: true, isFeatured: false, isFavorite: true, status: 'published',
+    isLive: true, isFavorite: true, status: 'published',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
   },
   {
@@ -156,7 +156,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=1080&q=80&fit=crop',
     price: 12000, currency: 'CDF', category: 'Art & Culture',
     maxAttendees: 500, attendees: 220,
-    isLive: false, isFeatured: false, isFavorite: false, status: 'published',
+    isLive: false, isFavorite: false, status: 'published',
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -171,7 +171,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=1080&q=80&fit=crop',
     price: 10000, currency: 'XAF', category: 'Musique',
     maxAttendees: 5000, attendees: 2300,
-    isLive: true, isFeatured: true, isFavorite: false, status: 'published',
+    isLive: true, isFavorite: false, status: 'published',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
   },
   {
@@ -183,7 +183,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=1080&q=80&fit=crop',
     price: 50000, currency: 'XAF', category: 'Conférence',
     maxAttendees: 400, attendees: 190,
-    isLive: false, isFeatured: false, isFavorite: false, status: 'published',
+    isLive: false, isFavorite: false, status: 'published',
   },
   {
     countryCode: 'GA',
@@ -194,7 +194,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=1080&q=80&fit=crop',
     price: 8000, currency: 'XAF', category: 'Musique',
     maxAttendees: 700, attendees: 380,
-    isLive: false, isFeatured: false, isFavorite: true, status: 'published',
+    isLive: false, isFavorite: true, status: 'published',
   },
   {
     countryCode: 'GA',
@@ -205,7 +205,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1578321272176-b7bbc0679853?w=1080&q=80&fit=crop',
     price: 5000, currency: 'XAF', category: 'Art & Culture',
     maxAttendees: 250, attendees: 110,
-    isLive: false, isFeatured: true, isFavorite: false, status: 'published',
+    isLive: false, isFavorite: false, status: 'published',
   },
 
   // ═══════════════════════════════════════════════════════════════
@@ -220,7 +220,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1533174072545-7a4b6ad7a6c3?w=1080&q=80&fit=crop',
     price: 15000, currency: 'XOF', category: 'Musique',
     maxAttendees: 8000, attendees: 4500,
-    isLive: true, isFeatured: true, isFavorite: true, status: 'published',
+    isLive: true, isFavorite: true, status: 'published',
     streamUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
   },
   {
@@ -232,7 +232,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1524368535928-5b5e00ddc76b?w=1080&q=80&fit=crop',
     price: 20000, currency: 'XOF', category: 'Art & Culture',
     maxAttendees: 3000, attendees: 1800,
-    isLive: false, isFeatured: true, isFavorite: false, status: 'published',
+    isLive: false, isFavorite: false, status: 'published',
   },
   {
     countryCode: 'CI',
@@ -243,7 +243,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1527224538127-2104bb71c51b?w=1080&q=80&fit=crop',
     price: 18000, currency: 'XOF', category: 'Humour',
     maxAttendees: 1200, attendees: 560,
-    isLive: false, isFeatured: false, isFavorite: true, status: 'published',
+    isLive: false, isFavorite: true, status: 'published',
   },
   {
     countryCode: 'CI',
@@ -254,7 +254,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1551818255-e6e10975bc17?w=1080&q=80&fit=crop',
     price: 35000, currency: 'XOF', category: 'Conférence',
     maxAttendees: 600, attendees: 290,
-    isLive: false, isFeatured: false, isFavorite: false, status: 'published',
+    isLive: false, isFavorite: false, status: 'published',
   },
   {
     countryCode: 'CI',
@@ -265,7 +265,7 @@ const eventsData = [
     image: 'https://images.unsplash.com/photo-1485872299829-c673f5194813?w=1080&q=80&fit=crop',
     price: 0, currency: 'XOF', category: 'Art & Culture',
     maxAttendees: 20000, attendees: 8500,
-    isLive: false, isFeatured: false, isFavorite: true, status: 'published',
+    isLive: false, isFavorite: true, status: 'published',
   },
 ];
 
