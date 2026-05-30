@@ -27,10 +27,26 @@ export const eventRepository = {
   },
 
   async findByOrganizer(organizerId: string) {
-    return prisma.event.findMany({
+    const events = await prisma.event.findMany({
       where: { organizerId },
       orderBy: { createdAt: "desc" },
+      include: {
+        _count: {
+          select: {
+            tickets: { where: { status: { notIn: ["refunded", "expired"] } } },
+          },
+        },
+        transactions: {
+          where: { status: { in: ["completed", "paid"] } },
+          select: { netOrganisateur: true },
+        },
+      },
     });
+    return events.map(({ _count, transactions, ...e }) => ({
+      ...e,
+      attendees: _count.tickets,
+      totalRevenue: transactions.reduce((sum, t) => sum + t.netOrganisateur, 0),
+    }));
   },
 
   async findAll(countryCode?: string, interests?: string[]) {
