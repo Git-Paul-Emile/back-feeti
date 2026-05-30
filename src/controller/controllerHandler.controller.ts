@@ -10,6 +10,7 @@ import { eventRepository } from "../repositories/event.repository.js";
 import { ticketRepository } from "../repositories/ticket.repository.js";
 import { prisma } from "../config/database.js";
 import bcrypt from "bcrypt";
+import { fbAuth, db, FieldValue } from "../config/firebase-admin.js";
 
 const BCRYPT_SALT = parseInt(process.env.BCRYPT_SALT || "10");
 
@@ -43,6 +44,28 @@ export const createAndAssignController = controllerWrapper(async (req: Request, 
     controller = await prisma.user.create({
       data: { name, email, phone, passwordHash, role: "controller" },
     });
+
+    // Créer le compte Firebase Auth pour permettre la connexion via le frontend
+    try {
+      const fbUser = await fbAuth.createUser({ email, displayName: name, password });
+      await fbAuth.setCustomUserClaims(fbUser.uid, { role: "controller" });
+      controller = await prisma.user.update({
+        where: { id: controller.id },
+        data: { firebaseUid: fbUser.uid },
+      });
+      await db.collection("users").doc(fbUser.uid).set({
+        uid: fbUser.uid,
+        name,
+        email,
+        phone: phone || null,
+        role: "controller",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } catch (err) {
+      console.error("[controller] Erreur création Firebase Auth:", err);
+      // Le compte PostgreSQL est créé — on continue sans bloquer
+    }
   }
 
   // Affecter à l'événement
