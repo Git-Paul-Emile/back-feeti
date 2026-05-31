@@ -11,8 +11,10 @@ import { ticketRepository } from "../repositories/ticket.repository.js";
 import { prisma } from "../config/database.js";
 import bcrypt from "bcrypt";
 import { fbAuth, db, FieldValue } from "../config/firebase-admin.js";
+import { emailService } from "../services/email.service.js";
 
 const BCRYPT_SALT = parseInt(process.env.BCRYPT_SALT || "10");
+const FRONT_URL = process.env.FRONT_URL || "http://localhost:5173";
 
 // ── Organisateur : gérer les contrôleurs d'un événement ──────────────────────
 
@@ -39,6 +41,7 @@ export const createAndAssignController = controllerWrapper(async (req: Request, 
   if (controller && controller.role !== "controller") {
     throw new AppError("Cet email est déjà utilisé par un autre compte", StatusCodes.CONFLICT);
   }
+  const isNewController = !controller;
   if (!controller) {
     const passwordHash = await bcrypt.hash(password, BCRYPT_SALT);
     controller = await prisma.user.create({
@@ -70,6 +73,17 @@ export const createAndAssignController = controllerWrapper(async (req: Request, 
 
   // Affecter à l'événement
   const assignment = await eventControllerRepository.assign(eventId, controller.id);
+
+  // Envoyer les identifiants par email (non bloquant)
+  if (isNewController) {
+    emailService.sendWelcomeController(email, {
+      controllerName: name,
+      email,
+      password,
+      eventTitle: event.title,
+      loginUrl: `${FRONT_URL}/login`,
+    }).catch(err => console.error("[controller] Erreur envoi email identifiants:", err));
+  }
 
   res.status(StatusCodes.CREATED).json(
     jsonResponse({ status: "success", message: "Contrôleur créé et affecté", data: assignment })
@@ -147,6 +161,51 @@ export const removeController = controllerWrapper(async (req: Request, res: Resp
   );
 });
 
+/** Modifier les infos d'un contrôleur (nom, téléphone, mot de passe) */
+export const updateController = controllerWrapper(async (req: Request, res: Response) => {
+  const organizerId = req.user!.userId;
+  const role = req.user!.role;
+  const { eventId, controllerId } = req.params;
+  const { name, phone, password } = req.body;
+
+  const event = await eventService.getEventById(eventId);
+  if (!event) throw new AppError("Événement introuvable", StatusCodes.NOT_FOUND);
+
+  const isAdmin = role === "admin" || role === "super_admin";
+  if (!isAdmin && event.organizerId !== organizerId) {
+    throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
+  }
+
+  const assignment = await eventControllerRepository.findAssignment(eventId, controllerId);
+  if (!assignment) throw new AppError("Ce contrôleur n'est pas affecté à cet événement", StatusCodes.NOT_FOUND);
+
+  const updateData: any = {};
+  if (name) updateData.name = name;
+  if (phone !== undefined) updateData.phone = phone || null;
+  if (password) {
+    updateData.passwordHash = await bcrypt.hash(password, BCRYPT_SALT);
+    // Mettre à jour le mot de passe Firebase aussi
+    try {
+      const user = await prisma.user.findUnique({ where: { id: controllerId } });
+      if (user?.firebaseUid) {
+        await fbAuth.updateUser(user.firebaseUid, { password });
+      }
+    } catch (err) {
+      console.error("[controller] Erreur update Firebase password:", err);
+    }
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: controllerId },
+    data: updateData,
+    select: { id: true, name: true, email: true, phone: true },
+  });
+
+  res.status(StatusCodes.OK).json(
+    jsonResponse({ status: "success", message: "Contrôleur mis à jour", data: updated })
+  );
+});
+
 // ── Contrôleur : son propre dashboard ────────────────────────────────────────
 
 /** Événements assignés au contrôleur connecté */
@@ -178,7 +237,40 @@ export const verifyTicketAsController = controllerWrapper(async (req: Request, r
   const { qrData } = req.body;
   if (!qrData) throw new AppError("qrData requis", StatusCodes.BAD_REQUEST);
 
-  const ticket = await ticketRepository.findByQrData(qrData);
+  // Chercher d'abord par qrData exact (scan caméra → JSON signé)
+  let ticket = await ticketRepository.findByQrData(qrData);
+
+  // Fallback saisie manuelle
+  if (!ticket) {
+    const input = qrData.trim();
+    // Cas 1 : JSON signé avec ticketId (scan partiel ou copier-coller)
+    try {
+      const parsed = JSON.parse(input);
+      if (parsed?.ticketId) {
+        ticket = await prisma.ticket.findUnique({
+          where: { id: parsed.ticketId },
+          include: { event: true, user: true },
+        });
+      }
+    } catch { /* pas du JSON */ }
+
+    // Cas 2 : N° court affiché sur le billet (8 derniers chars de l'id, ex: "YEM4RBZ8")
+    if (!ticket && /^[A-Z0-9]{8}$/i.test(input)) {
+      ticket = await prisma.ticket.findFirst({
+        where: { id: { endsWith: input.toLowerCase() } },
+        include: { event: true, user: true },
+      });
+    }
+
+    // Cas 3 : UUID complet collé manuellement
+    if (!ticket) {
+      ticket = await prisma.ticket.findUnique({
+        where: { id: input },
+        include: { event: true, user: true },
+      }).catch(() => null);
+    }
+  }
+
   if (!ticket) throw new AppError("Billet invalide ou introuvable", StatusCodes.NOT_FOUND);
 
   // Vérifier que ce contrôleur est bien affecté à cet événement

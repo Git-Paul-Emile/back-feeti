@@ -7,6 +7,7 @@ import { controllerWrapper } from "../utils/ControllerWrapper.js";
 import type { Role } from "../generated/prisma/client.js";
 import { eventRepository } from "../repositories/event.repository.js";
 import { emailService } from "../services/email.service.js";
+import { feetiPlaySyncService } from "../services/feetiPlaySync.service.js";
 
 // GET /api/admin/countries — returns ALL countries (including inactive)
 export const getAllCountriesAdmin = controllerWrapper(async (_req: Request, res: Response) => {
@@ -139,6 +140,8 @@ export const updateEventStatus = controllerWrapper(async (req: Request, res: Res
 
   const dashboardUrl = `${process.env.FRONTEND_URL || "https://feeti.cg"}/organizer`;
 
+  const isFeetiPlayEvent = event.eventType === "STREAMING_LIVE" || event.eventType === "MIXTE";
+
   if (status === "published") {
     emailService.sendEventApproved(event.organizer.email, {
       organizerName: event.organizer.name,
@@ -153,6 +156,11 @@ export const updateEventStatus = controllerWrapper(async (req: Request, res: Res
       rejectionReason: rejectionReason!.trim(),
       dashboardUrl,
     }).catch(() => {});
+
+    // Supprimer le miroir FeetiPlay si l'événement est rejeté
+    if (isFeetiPlayEvent) {
+      feetiPlaySyncService.deleteLiveEvent(`feeti2_live_${event.id}`).catch(() => {});
+    }
   }
 
   res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Statut mis à jour", data: updated }));

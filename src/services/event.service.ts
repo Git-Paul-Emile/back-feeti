@@ -33,7 +33,8 @@ function mapSyncedLiveEvent(event: Awaited<ReturnType<typeof feetiPlaySyncServic
     isLive: event.isLive,
     eventType: "STREAMING_LIVE" as const,
     isFavorite: false,
-    status: event.isLive ? "published" : "completed",
+    // isLive=true → en cours ; isReplay=true → terminé ; sinon → à venir (draft côté feeti2)
+    status: event.isLive ? "published" : (event.isReplay ? "completed" : "draft"),
     streamUrl: event.streamUrl ?? undefined,
     videoUrl: event.videoUrl ?? undefined,
     countryCode: undefined,
@@ -69,42 +70,15 @@ export const eventService = {
     featuredHomepage?: boolean;
   }) {
     const targetEventType = data.eventType ?? (data.isLive ? "STREAMING_LIVE" : "PRESENTIEL");
+    const needsFeetiPlaySync = targetEventType === "STREAMING_LIVE" || targetEventType === "MIXTE";
 
-    // Streaming pur: l'événement vit côté FeetiPlay synchronisé.
-    if (targetEventType === "STREAMING_LIVE") {
-      const organizer = await prisma.user.findUnique({
-        where: { id: data.organizerId },
-        select: { name: true },
-      });
-
-      const syncedEvent = await feetiPlaySyncService.upsertLiveEvent({
-        id: data.id ?? `${FEETIPLAY_LIVE_ID_PREFIX}${randomUUID()}`,
-        title: data.title,
-        description: data.description,
-        date: data.date,
-        time: data.time,
-        duration: data.duration,
-        image: data.image,
-        category: data.category,
-        isLive: true,
-        isFeatured: false,
-        streamUrl: data.streamUrl,
-        videoUrl: data.videoUrl,
-        price: data.price,
-        currency: data.currency,
-        organizerId: data.organizerId,
-        organizerName: organizer?.name ?? "Organisateur",
-        location: data.location,
-      });
-
-      return mapSyncedLiveEvent(syncedEvent);
-    }
-
-    // Présentiel / Mixte: l'événement existe dans Feeti2 (PostgreSQL).
+    // Tous les types créent un enregistrement PostgreSQL en draft.
     const event = await eventRepository.create({
       ...data,
+      id: data.id ?? (needsFeetiPlaySync ? randomUUID() : undefined),
       eventType: targetEventType,
-      isLive: targetEventType === "MIXTE" ? true : !!data.isLive,
+      isLive: needsFeetiPlaySync,
+      status: "draft",
     });
 
     // Synchroniser dans Firestore
@@ -112,13 +86,15 @@ export const eventService = {
       logger.error(`Erreur sync Firestore pour event ${event.id}:`, err);
     });
 
-    // Pour MIXTE, publier aussi la version live dans FeetiPlay.
-    if (targetEventType === "MIXTE") {
+    // Pour STREAMING_LIVE et MIXTE : créer immédiatement dans FeetiPlay
+    // avec isLive: false (événement "à venir", visible mais pas encore en direct).
+    // Le passage à isLive: true se fait quand l'organisateur démarre le stream.
+    if (needsFeetiPlaySync) {
       const organizer = await prisma.user.findUnique({
         where: { id: data.organizerId },
         select: { name: true },
       });
-      await feetiPlaySyncService.upsertLiveEvent({
+      feetiPlaySyncService.upsertLiveEvent({
         id: `${FEETIPLAY_LIVE_ID_PREFIX}${event.id}`,
         title: event.title,
         description: event.description,
@@ -127,7 +103,7 @@ export const eventService = {
         duration: event.duration ?? "",
         image: event.image,
         category: event.category,
-        isLive: true,
+        isLive: false,
         isFeatured: false,
         streamUrl: event.streamUrl ?? undefined,
         videoUrl: event.videoUrl ?? undefined,
@@ -136,9 +112,11 @@ export const eventService = {
         organizerId: event.organizerId,
         organizerName: organizer?.name ?? "Organisateur",
         location: event.location,
+      }).catch((err) => {
+        logger.error(`Erreur sync FeetiPlay pour event ${event.id}:`, err);
       });
     }
-    
+
     return event;
   },
 
@@ -210,12 +188,17 @@ export const eventService = {
     
     // Supprimer de PostgreSQL
     const deleted = await eventRepository.delete(eventId);
-    
+
     // Supprimer de Firestore
     await firestoreSyncService.deleteDocument('events', eventId).catch((err) => {
       logger.error(`Erreur suppression Firestore pour event ${eventId}:`, err);
     });
-    
+
+    // Pour STREAMING_LIVE et MIXTE : supprimer aussi le miroir FeetiPlay
+    if (event.eventType === "STREAMING_LIVE" || event.eventType === "MIXTE") {
+      await feetiPlaySyncService.deleteLiveEvent(`${FEETIPLAY_LIVE_ID_PREFIX}${eventId}`).catch(() => {});
+    }
+
     return deleted;
   },
 
@@ -396,8 +379,10 @@ export const eventService = {
       return mapSyncedLiveEvent(syncedEvent);
     }
 
+    // Un organisateur ne peut pas changer le statut — seul l'admin peut via /api/admin/events/:id/status
+    const { status: _ignoredStatus, ...safeData } = data as typeof data & { status?: string };
     const updated = await eventRepository.update(eventId, {
-      ...data,
+      ...(!isAdmin ? safeData : data),
       eventType: targetEventType,
       isLive: targetEventType === "MIXTE" ? true : data.isLive,
     });

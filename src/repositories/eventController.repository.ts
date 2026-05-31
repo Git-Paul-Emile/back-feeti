@@ -36,6 +36,13 @@ export const eventControllerRepository = {
     });
   },
 
+  /** Récupérer une affectation spécifique */
+  async findAssignment(eventId: string, controllerId: string) {
+    return prisma.eventController.findUnique({
+      where: { eventId_controllerId: { eventId, controllerId } },
+    });
+  },
+
   /** Vérifier si un contrôleur est affecté à un événement */
   async isAssigned(eventId: string, controllerId: string) {
     const record = await prisma.eventController.findUnique({

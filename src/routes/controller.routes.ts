@@ -5,6 +5,7 @@ import {
   assignExistingController,
   listEventControllers,
   removeController,
+  updateController,
   getMyAssignedEvents,
   getMyScanHistory,
   verifyTicketAsController,
@@ -39,6 +40,13 @@ router.delete(
   authenticate,
   requireRole("organizer", "admin", "super_admin"),
   removeController
+);
+
+router.patch(
+  "/events/:eventId/controllers/:controllerId",
+  authenticate,
+  requireRole("organizer", "admin", "super_admin"),
+  updateController
 );
 
 // ── Contrôleur : son dashboard ────────────────────────────────────────────────

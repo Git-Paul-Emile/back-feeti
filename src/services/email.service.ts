@@ -118,8 +118,8 @@ export function templateTicketConfirmation(data: {
   totalAmount: number;
   currency: string;
 }): string {
-  const FRONTEND_URL = process.env.FRONTEND_URL || "https://feeti.cg";
-  const API_URL = process.env.API_URL || "https://api.feeti.cg";
+  const FRONTEND_URL = process.env.FRONTEND_URL || "https://front-feeti.vercel.app";
+  const API_URL = process.env.API_URL || "https://back-feeti.onrender.com";
 
   const ticketRows = data.tickets
     .map(
@@ -286,6 +286,52 @@ export function templateWelcomeOrganizer(data: { organizerName: string; contract
   `);
 }
 
+export function templateWelcomeController(data: {
+  controllerName: string;
+  email: string;
+  password: string;
+  eventTitle: string;
+  loginUrl: string;
+}): string {
+  return baseLayout(`
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="display:inline-block;background:#ecfdf5;border-radius:50%;padding:16px;margin-bottom:16px;">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+      </div>
+      <h2 style="margin:0;font-size:24px;font-weight:700;color:#111827;">Bienvenue, ${data.controllerName} !</h2>
+      <p style="margin:10px 0 0;color:#6b7280;font-size:15px;">Vous avez été assigné comme contrôleur de billets</p>
+    </div>
+    <p style="color:#374151;font-size:15px;line-height:1.7;margin-bottom:24px;">
+      Un compte contrôleur Féeti vient d'être créé pour vous afin de gérer l'accès à l'événement :
+      <strong style="color:#111827;">${data.eventTitle}</strong>.
+    </p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:24px;margin-bottom:28px;">
+      <h3 style="margin:0 0 16px;font-size:15px;font-weight:700;color:#166534;">Vos identifiants de connexion</h3>
+      <table cellpadding="0" cellspacing="0" style="width:100%;">
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;width:100px;">Email</td>
+          <td style="padding:6px 0;color:#111827;font-size:14px;font-weight:600;">${data.email}</td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:#6b7280;font-size:14px;">Mot de passe</td>
+          <td style="padding:6px 0;">
+            <span style="background:#ffffff;border:1px solid #d1fae5;border-radius:6px;padding:4px 12px;font-family:monospace;font-size:15px;font-weight:700;color:#065f46;letter-spacing:1px;">${data.password}</span>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:16px 0 0;color:#6b7280;font-size:12px;">Conservez ces identifiants en lieu sûr. Vous pourrez modifier votre mot de passe après connexion.</p>
+    </div>
+    <div style="text-align:center;margin-bottom:28px;">
+      <a href="${data.loginUrl}" style="display:inline-block;background:linear-gradient(135deg,#059669,#10b981);color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;font-weight:600;">
+        Se connecter à Féeti
+      </a>
+    </div>
+    <p style="color:#9ca3af;font-size:13px;margin:0;">Si vous n'attendiez pas ce message, ignorez cet email ou contactez l'organisateur.</p>
+  `);
+}
+
 export function templatePasswordChanged(data: { userName: string }): string {
   return baseLayout(`
     <h2 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#111827;">Mot de passe modifié</h2>
@@ -436,6 +482,15 @@ class EmailService {
       subject: `Bienvenue sur Féeti Organisateur, ${data.organizerName} !`,
       html: templateWelcomeOrganizer(data),
       text: `Bienvenue ${data.organizerName} ! Votre compte organisateur Féeti a été créé.${signingText}`,
+    });
+  }
+
+  async sendWelcomeController(to: string, data: Parameters<typeof templateWelcomeController>[0]): Promise<void> {
+    await this.provider.send({
+      to,
+      subject: `Vos identifiants contrôleur Féeti — ${data.eventTitle}`,
+      html: templateWelcomeController(data),
+      text: `Bonjour ${data.controllerName}, voici vos identifiants : email: ${data.email} / mot de passe: ${data.password}. Connectez-vous sur ${data.loginUrl}`,
     });
   }
 

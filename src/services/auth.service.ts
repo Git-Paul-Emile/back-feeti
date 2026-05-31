@@ -355,7 +355,7 @@ export const authService = {
     if (!user) return;
 
     const resetToken = generatePasswordResetToken(user.id);
-    const resetUrl = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password?token=${resetToken}`;
+    const resetUrl = `${process.env.FRONTEND_URL || "https://front-feeti.vercel.app"}/reset-password?token=${resetToken}`;
 
     await addEmailJob({ type: "password-reset", to: user.email, userName: user.name, resetUrl });
   },

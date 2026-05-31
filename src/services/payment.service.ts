@@ -175,7 +175,7 @@ export const paymentService = {
       id: reference,
       reference,
       // En simulation : URL de retour factice (en prod = vraie URL Paystack)
-      authorizationUrl: `${process.env.FRONT_URL || "http://localhost:3000"}/payment/paystack?ref=${reference}`,
+      authorizationUrl: `${process.env.FRONT_URL || "https://front-feeti.vercel.app"}/payment/paystack?ref=${reference}`,
       email: params.email,
       amount: params.amount,
       currency: params.currency,

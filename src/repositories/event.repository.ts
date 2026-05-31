@@ -56,7 +56,6 @@ export const eventRepository = {
     const events = await prisma.event.findMany({
       where: {
         status: "published",
-        isLive: false,
         ...(countryCode ? { countryCode } : {}),
       },
       include: { organizer: { select: { name: true } } },

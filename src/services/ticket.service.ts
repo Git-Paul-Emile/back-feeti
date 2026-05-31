@@ -143,7 +143,40 @@ export const ticketService = {
   },
 
   async verifyTicket(qrData: string, organizerId: string, role?: string) {
-    const ticket = await ticketRepository.findByQrData(qrData);
+    // Chercher d'abord par qrData exact (scan caméra → JSON signé)
+    let ticket = await ticketRepository.findByQrData(qrData);
+
+    // Fallback saisie manuelle
+    if (!ticket) {
+      const input = qrData.trim();
+      // Cas 1 : JSON signé avec ticketId
+      try {
+        const parsed = JSON.parse(input);
+        if (parsed?.ticketId) {
+          ticket = await prisma.ticket.findUnique({
+            where: { id: parsed.ticketId },
+            include: { event: true, user: true },
+          });
+        }
+      } catch { /* pas du JSON */ }
+
+      // Cas 2 : N° court du billet (8 derniers chars de l'id, ex: "YEM4RBZ8")
+      if (!ticket && /^[A-Z0-9]{8}$/i.test(input)) {
+        ticket = await prisma.ticket.findFirst({
+          where: { id: { endsWith: input.toLowerCase() } },
+          include: { event: true, user: true },
+        });
+      }
+
+      // Cas 3 : UUID complet
+      if (!ticket) {
+        ticket = await prisma.ticket.findUnique({
+          where: { id: input },
+          include: { event: true, user: true },
+        }).catch(() => null);
+      }
+    }
+
     if (!ticket) throw new AppError("Billet invalide ou introuvable", StatusCodes.NOT_FOUND);
 
     const isAdmin = role === "admin" || role === "super_admin";
