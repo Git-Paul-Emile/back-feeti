@@ -21,6 +21,7 @@ export const eventRepository = {
     streamUrl?: string;
     videoUrl?: string;
     countryCode?: string;
+    status?: string;
     organizerId: string;
   }) {
     return prisma.event.create({ data });
