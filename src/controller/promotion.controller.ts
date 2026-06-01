@@ -205,9 +205,16 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
     throw new AppError("paymentRef requis pour un paiement immédiat", StatusCodes.BAD_REQUEST);
   }
 
-  // Vérifier ownership
-  const event = await prisma.event.findUnique({ where: { id: eventId } });
-  if (!event) throw new AppError("Événement introuvable", StatusCodes.NOT_FOUND);
+  // Les événements feeti2_live_ existent dans Firestore, pas en PostgreSQL.
+  // Pour les événements MIXTE, leur ID local est l'UUID sans le préfixe.
+  const FEETIPLAY_PREFIX = "feeti2_live_";
+  const isLiveAlias = eventId.startsWith(FEETIPLAY_PREFIX);
+  const localEventId = isLiveAlias ? eventId.replace(FEETIPLAY_PREFIX, "") : eventId;
+
+  const event = await prisma.event.findUnique({ where: { id: localEventId } });
+  if (!event) {
+    throw new AppError("Événement introuvable", StatusCodes.NOT_FOUND);
+  }
   if (event.organizerId !== organizerId) {
     throw new AppError("Vous n'êtes pas le propriétaire de cet événement", StatusCodes.FORBIDDEN);
   }
@@ -223,7 +230,7 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
   const limit = SLOT_LIMITS[packType];
   const activeCount = await prisma.event.count({
     where: {
-      id: { not: eventId },
+      id: { not: localEventId },
       promotionType: packType,
       promotionStatus: "active",
       OR: [{ promotionEndDate: null }, { promotionEndDate: { gte: now } }],
@@ -268,7 +275,7 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
   const [purchase] = await prisma.$transaction([
     prisma.promotionPurchase.create({
       data: {
-        eventId,
+        eventId: localEventId,
         organizerId,
         packType,
         pricePaid: cfg.price,
@@ -285,7 +292,7 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
     }),
     // Dans les deux cas l'événement est mis en avant immédiatement
     prisma.event.update({
-      where: { id: eventId },
+      where: { id: localEventId },
       data: {
         promotionType: packType,
         promotionStatus: "active",

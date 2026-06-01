@@ -278,9 +278,15 @@ export const eventService = {
         select: { name: true },
       });
 
-      if (data.isLive === false || data.eventType === "PRESENTIEL") {
+      const localId = eventId.replace(FEETIPLAY_LIVE_ID_PREFIX, "");
+      // Un événement FeetiPlay visible est considéré publié — la modification
+      // ne doit pas repasser par une validation admin.
+      const preservedStatus = "published";
+      const targetType = data.eventType ?? "STREAMING_LIVE";
+
+      if (data.isLive === false || targetType === "PRESENTIEL") {
+        // Conversion vers PRESENTIEL : supprime FeetiPlay, crée record local pur
         await feetiPlaySyncService.deleteLiveEvent(eventId);
-        const localId = eventId.replace(FEETIPLAY_LIVE_ID_PREFIX, "");
         return eventRepository.create({
           id: localId,
           title: data.title ?? event.title,
@@ -294,17 +300,91 @@ export const eventService = {
           ticketTypes: data.ticketTypes,
           currency: data.currency ?? event.currency,
           category: data.category ?? event.category,
-          eventType: data.eventType ?? "PRESENTIEL",
+          eventType: "PRESENTIEL",
           maxAttendees: data.maxAttendees ?? 100,
           duration: data.duration ?? event.duration,
           isLive: false,
           streamUrl: undefined,
           videoUrl: undefined,
           countryCode: data.countryCode ?? undefined,
+          status: preservedStatus,
           organizerId,
         });
       }
 
+      if (targetType === "MIXTE") {
+        // Conversion vers MIXTE : crée/met à jour le record PostgreSQL local
+        // ET conserve le miroir FeetiPlay
+        const existingLocal = await eventRepository.findById(localId);
+        const localEvent = existingLocal
+          ? await eventRepository.update(localId, {
+              title: data.title ?? event.title,
+              description: data.description ?? event.description,
+              date: data.date ?? event.date,
+              time: data.time ?? event.time,
+              location: data.location ?? event.location,
+              image: data.image ?? event.image,
+              price: data.price ?? event.price,
+              vipPrice: data.vipPrice,
+              ticketTypes: data.ticketTypes,
+              currency: data.currency ?? event.currency,
+              category: data.category ?? event.category,
+              eventType: "MIXTE",
+              maxAttendees: data.maxAttendees ?? 100,
+              duration: data.duration ?? event.duration ?? undefined,
+              isLive: true,
+              streamUrl: data.streamUrl ?? event.streamUrl ?? undefined,
+              videoUrl: data.videoUrl ?? event.videoUrl ?? undefined,
+              countryCode: data.countryCode ?? undefined,
+            })
+          : await eventRepository.create({
+              id: localId,
+              title: data.title ?? event.title,
+              description: data.description ?? event.description,
+              date: data.date ?? event.date,
+              time: data.time ?? event.time,
+              location: data.location ?? event.location,
+              image: data.image ?? event.image,
+              price: data.price ?? event.price,
+              vipPrice: data.vipPrice,
+              ticketTypes: data.ticketTypes,
+              currency: data.currency ?? event.currency,
+              category: data.category ?? event.category,
+              eventType: "MIXTE",
+              maxAttendees: data.maxAttendees ?? 100,
+              duration: data.duration ?? event.duration,
+              isLive: true,
+              streamUrl: data.streamUrl ?? event.streamUrl ?? undefined,
+              videoUrl: data.videoUrl ?? event.videoUrl ?? undefined,
+              countryCode: data.countryCode ?? undefined,
+              status: preservedStatus,
+              organizerId,
+            });
+
+        await feetiPlaySyncService.upsertLiveEvent({
+          id: eventId,
+          title: localEvent.title,
+          description: localEvent.description,
+          date: localEvent.date,
+          time: localEvent.time,
+          duration: localEvent.duration ?? "",
+          image: localEvent.image,
+          category: localEvent.category,
+          isLive: true,
+          isFeatured: false,
+          streamUrl: localEvent.streamUrl ?? undefined,
+          videoUrl: localEvent.videoUrl ?? undefined,
+          price: localEvent.price,
+          currency: localEvent.currency,
+          organizerId,
+          organizerName: organizer?.name ?? event.channelName,
+          location: localEvent.location,
+        });
+
+        return localEvent;
+      }
+
+      // STREAMING_LIVE : mise à jour FeetiPlay uniquement
       const syncedEvent = await feetiPlaySyncService.upsertLiveEvent({
         id: eventId,
         title: data.title ?? event.title,
@@ -325,6 +405,30 @@ export const eventService = {
         location: data.location ?? event.location,
       });
 
+      // Met à jour le record PostgreSQL local si présent (suite au fix de conservation)
+      const existingLocalEvent = await eventRepository.findById(localId);
+      if (existingLocalEvent) {
+        await eventRepository.update(localId, {
+          title: data.title ?? event.title,
+          description: data.description ?? event.description,
+          date: data.date ?? event.date,
+          time: data.time ?? event.time,
+          location: data.location ?? event.location,
+          image: data.image ?? event.image,
+          price: data.price ?? event.price,
+          vipPrice: data.vipPrice,
+          ticketTypes: data.ticketTypes,
+          currency: data.currency ?? event.currency,
+          category: data.category ?? event.category,
+          eventType: "STREAMING_LIVE",
+          maxAttendees: data.maxAttendees ?? event.maxAttendees ?? 100,
+          duration: data.duration ?? event.duration ?? undefined,
+          isLive: true,
+          streamUrl: data.streamUrl ?? event.streamUrl ?? undefined,
+          videoUrl: data.videoUrl ?? event.videoUrl ?? undefined,
+        });
+      }
+
       return mapSyncedLiveEvent(syncedEvent);
     }
 
@@ -336,17 +440,6 @@ export const eventService = {
     if (!isAdmin && event.organizerId !== organizerId) {
       throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
     }
-    // Organisateur ne peut pas modifier si des billets ont été vendus
-    if (!isAdmin) {
-      const ticketCount = await ticketRepository.countByEvent(eventId);
-      if (ticketCount > 0) {
-        throw new AppError(
-          `Impossible de modifier : ${ticketCount} billet(s) déjà vendu(s) pour cet événement`,
-          StatusCodes.CONFLICT
-        );
-      }
-    }
-
     const targetEventType = data.eventType ?? (data.isLive ? "STREAMING_LIVE" : event.eventType);
 
     if (targetEventType === "STREAMING_LIVE") {
@@ -375,7 +468,29 @@ export const eventService = {
         location: data.location ?? event.location,
       });
 
-      await eventRepository.delete(eventId);
+      // On garde le record PostgreSQL local (nécessaire pour le système de promotion,
+      // les transactions financières, etc.). La déduplication dans getOrganizerEvents
+      // filtre déjà les miroirs FeetiPlay quand un record local existe.
+      await eventRepository.update(eventId, {
+        title: data.title ?? event.title,
+        description: data.description ?? event.description,
+        date: data.date ?? event.date,
+        time: data.time ?? event.time,
+        location: data.location ?? event.location,
+        image: data.image ?? event.image,
+        price: data.price ?? event.price,
+        vipPrice: data.vipPrice,
+        ticketTypes: data.ticketTypes,
+        currency: data.currency ?? event.currency,
+        category: data.category ?? event.category,
+        eventType: "STREAMING_LIVE",
+        maxAttendees: data.maxAttendees ?? event.maxAttendees,
+        duration: data.duration ?? event.duration ?? undefined,
+        isLive: true,
+        streamUrl: data.streamUrl ?? event.streamUrl ?? undefined,
+        videoUrl: data.videoUrl ?? event.videoUrl ?? undefined,
+        countryCode: data.countryCode ?? event.countryCode,
+      });
       return mapSyncedLiveEvent(syncedEvent);
     }
 

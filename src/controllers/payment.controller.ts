@@ -12,6 +12,7 @@ import { paymentService } from "../services/payment.service.js";
 import { ticketService } from "../services/ticket.service.js";
 import { transactionService } from "../services/transaction.service.js";
 import { addEmailJob } from "../queues/email.queue.js";
+import { emailService } from "../services/email.service.js";
 import { controllerWrapper } from "../utils/ControllerWrapper.js";
 import { jsonResponse } from "../utils/response.js";
 import { AppError } from "../utils/AppError.js";
@@ -209,27 +210,31 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
   );
 
   // Email sans QR code dans le corps — le PDF est téléchargeable depuis la plateforme
-  addEmailJob({
-    type: "ticket-confirmation",
-    to: holderEmail,
-    data: {
-      holderName,
-      eventTitle: ticketsWithQR[0]?.event?.title ?? "Événement",
-      eventDate: ticketsWithQR[0]?.event?.date ?? "",
-      eventTime: ticketsWithQR[0]?.event?.time ?? "",
-      eventLocation: ticketsWithQR[0]?.event?.location ?? "",
-      orderId: purchaseResult.orderId,
-      tickets: ticketsWithQR.map((t: any) => ({
-        id: t.id,
-        category: t.category,
-        price: t.price,
-        currency: t.currency,
-        // qrDataUrl intentionnellement omis : QR uniquement dans le PDF téléchargeable
-      })),
-      totalAmount,
-      currency: ticketsWithQR[0]?.currency ?? "FCFA",
-    },
-  }).catch(() => {});
+  const emailData = {
+    holderName,
+    eventTitle: ticketsWithQR[0]?.event?.title ?? "Événement",
+    eventDate: ticketsWithQR[0]?.event?.date ?? "",
+    eventTime: ticketsWithQR[0]?.event?.time ?? "",
+    eventLocation: ticketsWithQR[0]?.event?.location ?? "",
+    orderId: purchaseResult.orderId,
+    tickets: ticketsWithQR.map((t: any) => ({
+      id: t.id,
+      category: t.category,
+      price: t.price,
+      currency: t.currency,
+    })),
+    totalAmount,
+    currency: ticketsWithQR[0]?.currency ?? "FCFA",
+  };
+
+  try {
+    await addEmailJob({ type: "ticket-confirmation", to: holderEmail, data: emailData });
+  } catch (queueErr) {
+    console.warn("[payment] Queue Redis indisponible, envoi direct SMTP:", (queueErr as Error).message);
+    emailService.sendTicketConfirmation(holderEmail, emailData).catch((smtpErr) =>
+      console.error("[payment] Échec envoi email confirmation billet:", (smtpErr as Error).message)
+    );
+  }
 
   res.status(StatusCodes.CREATED).json(
     jsonResponse({
