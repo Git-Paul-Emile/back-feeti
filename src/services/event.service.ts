@@ -421,7 +421,7 @@ export const eventService = {
           currency: data.currency ?? event.currency,
           category: data.category ?? event.category,
           eventType: "STREAMING_LIVE",
-          maxAttendees: data.maxAttendees ?? event.maxAttendees ?? 100,
+          maxAttendees: data.maxAttendees ?? 100,
           duration: data.duration ?? event.duration ?? undefined,
           isLive: true,
           streamUrl: data.streamUrl ?? event.streamUrl ?? undefined,
