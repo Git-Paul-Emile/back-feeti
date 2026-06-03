@@ -17,6 +17,8 @@ import {
   getTracking, getAccessLogs, getRefusedAttempts, exportCsv, exportBadgesCsv, duplicateConfig,
   // Signalement
   reportSuspect, getSuspectReports,
+  // Tarification & Commandes badges
+  getBadgePricing, createBadgeOrder, payBadgeOrder, getMyBadgeOrders,
 } from "../controller/access.controller.js";
 
 const router = Router();
@@ -74,5 +76,13 @@ router.post  ("/events/:eventId/duplicate-config", authenticate, orgOrAdmin, dup
 // ── Signalement suspect ───────────────────────────────────────────────
 router.post  ("/badges/:badgeId/report",          authenticate, agentOrAbove, reportSuspect);
 router.get   ("/events/:eventId/reports/suspect", authenticate, orgOrAdmin, getSuspectReports);
+
+// ── Tarification badges (lecture publique, écriture admin) ────────────
+router.get   ("/badge-pricing",                   getBadgePricing);
+
+// ── Commandes de badges ───────────────────────────────────────────────
+router.post  ("/badge-orders",                    authenticate, orgOrAdmin, createBadgeOrder);
+router.post  ("/badge-orders/:orderId/pay",       authenticate, orgOrAdmin, payBadgeOrder);
+router.get   ("/badge-orders",                    authenticate, orgOrAdmin, getMyBadgeOrders);
 
 export default router;

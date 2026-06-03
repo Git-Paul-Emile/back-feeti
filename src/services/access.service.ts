@@ -927,4 +927,82 @@ export const accessService = {
       nextRefreshAt: (w + 1) * QR_WINDOW_SECONDS * 1000,
     };
   },
+
+  // ─── Tarification badge ──────────────────────────────────────────────
+
+  async getBadgePricing() {
+    const config = await prisma.badgePricingConfig.findUnique({ where: { id: "default" } });
+    return config ?? { id: "default", unitCost: 500, currency: "FCFA", updatedAt: new Date(), updatedBy: null };
+  },
+
+  async updateBadgePricing(unitCost: number, updatedBy: string) {
+    return prisma.badgePricingConfig.upsert({
+      where: { id: "default" },
+      update: { unitCost, updatedBy },
+      create: { id: "default", unitCost, currency: "FCFA", updatedBy },
+    });
+  },
+
+  // ─── Commandes de badges (événements privés) ─────────────────────────
+
+  async createBadgeOrder(data: {
+    eventId: string;
+    organizerId: string;
+    quantity: number;
+  }) {
+    const event = await prisma.event.findUnique({ where: { id: data.eventId } });
+    if (!event) throw new AppError("Événement introuvable", StatusCodes.NOT_FOUND);
+    if (event.organizerId !== data.organizerId) throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
+    if (!event.isPrivateForBadges) throw new AppError("Cet événement n'est pas un événement privé pour badges", StatusCodes.BAD_REQUEST);
+
+    const pricing = await accessService.getBadgePricing();
+    const totalAmount = data.quantity * pricing.unitCost;
+
+    return prisma.badgeOrder.create({
+      data: {
+        eventId: data.eventId,
+        organizerId: data.organizerId,
+        quantity: data.quantity,
+        unitCost: pricing.unitCost,
+        totalAmount,
+        currency: pricing.currency,
+        status: "pending",
+      },
+    });
+  },
+
+  async simulatePayBadgeOrder(orderId: string, organizerId: string) {
+    const order = await prisma.badgeOrder.findUnique({ where: { id: orderId } });
+    if (!order) throw new AppError("Commande introuvable", StatusCodes.NOT_FOUND);
+    if (order.organizerId !== organizerId) throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
+    if (order.status !== "pending") throw new AppError("Commande déjà traitée", StatusCodes.BAD_REQUEST);
+
+    return prisma.badgeOrder.update({
+      where: { id: orderId },
+      data: {
+        status: "paid",
+        paidAt: new Date(),
+        paymentMethod: "simulation",
+        paymentRef: `SIM-${Date.now()}`,
+      },
+    });
+  },
+
+  async getOrganizerBadgeOrders(organizerId: string) {
+    return prisma.badgeOrder.findMany({
+      where: { organizerId },
+      include: { event: { select: { id: true, title: true, date: true, location: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+  },
+
+  async getAdminBadgeOrders() {
+    return prisma.badgeOrder.findMany({
+      include: {
+        event: { select: { id: true, title: true } },
+        organizer: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  },
 };

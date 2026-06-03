@@ -68,17 +68,20 @@ export const eventService = {
     countryCode?: string;
     organizerId: string;
     featuredHomepage?: boolean;
+    isPrivateForBadges?: boolean;
   }) {
     const targetEventType = data.eventType ?? (data.isLive ? "STREAMING_LIVE" : "PRESENTIEL");
     const needsFeetiPlaySync = targetEventType === "STREAMING_LIVE" || targetEventType === "MIXTE";
 
     // Tous les types créent un enregistrement PostgreSQL en draft.
+    // Les événements privés ont les ventes bloquées par défaut.
     const event = await eventRepository.create({
       ...data,
       id: data.id ?? (needsFeetiPlaySync ? randomUUID() : undefined),
       eventType: targetEventType,
       isLive: needsFeetiPlaySync,
       status: "draft",
+      salesBlocked: data.isPrivateForBadges ? true : (data as any).salesBlocked ?? false,
     });
 
     // Synchroniser dans Firestore

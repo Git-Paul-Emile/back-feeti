@@ -23,6 +23,8 @@ export const eventRepository = {
     countryCode?: string;
     status?: string;
     organizerId: string;
+    isPrivateForBadges?: boolean;
+    salesBlocked?: boolean;
   }) {
     return prisma.event.create({ data });
   },
@@ -57,6 +59,7 @@ export const eventRepository = {
     const events = await prisma.event.findMany({
       where: {
         status: "published",
+        isPrivateForBadges: false,
         ...(countryCode ? { countryCode } : {}),
       },
       include: { organizer: { select: { name: true } } },

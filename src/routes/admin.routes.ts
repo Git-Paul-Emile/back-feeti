@@ -13,6 +13,7 @@ import {
 } from "../controller/delivery.controller.js";
 import { getSettings, updateSettings } from "../controller/settings.controller.js";
 import { getPlatformPricing, updatePlatformPricing, getAllSubscriptions, getAllDealPayments } from "../controller/platformPricing.controller.js";
+import { updateBadgePricing, getAdminBadgeOrders } from "../controller/access.controller.js";
 
 const router = Router();
 
@@ -86,6 +87,10 @@ router.get("/platform-pricing", getPlatformPricing);
 router.put("/platform-pricing", updatePlatformPricing);
 router.get("/subscriptions", getAllSubscriptions);
 router.get("/deal-payments", getAllDealPayments);
+
+// Tarification badges Feeti Access
+router.put("/badge-pricing", updateBadgePricing);
+router.get("/badge-orders", getAdminBadgeOrders);
 
 // Tickets admin routes
 router.get("/tickets/stats", getTicketsStats);

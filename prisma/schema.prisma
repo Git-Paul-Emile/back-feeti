@@ -81,6 +81,7 @@ model User {
   loyaltyProfile      LoyaltyProfile?
   // Feeti Access — badges créés par cet organisateur
   createdBadges               AccessBadge[]     @relation("BadgesCreated")
+  badgeOrders                 BadgeOrder[]      @relation("BadgeOrders")
   // Établissement owner
   establishmentSubscriptions  EstablishmentSubscription[]
   dealPayments                DealPayment[]
@@ -130,9 +131,11 @@ model Event {
   controllers  EventController[]
   transactions Transaction[]
   // Feeti Access
+  isPrivateForBadges    Boolean  @default(false) // événement privé (non public) pour génération de badges
   eventZones          EventZone[]
   participantCategories ParticipantCategory[]
   accessBadges        AccessBadge[]
+  badgeOrders         BadgeOrder[]
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   // Système de mise en avant par pack promotionnel
@@ -1123,6 +1126,42 @@ model EstablishmentSubscription {
 
   @@index([userId])
   @@index([leisureItemId])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  FEETI ACCESS — Commandes de badges (événements privés)
+// ═══════════════════════════════════════════════════════════════════════
+
+// Configuration du coût unitaire d'un badge (singleton géré par l'admin)
+model BadgePricingConfig {
+  id          String   @id @default("default")
+  unitCost    Int      @default(500)    // coût par badge en FCFA
+  currency    String   @default("FCFA")
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+}
+
+// Commande de badges pour un événement privé
+model BadgeOrder {
+  id            String   @id @default(cuid())
+  eventId       String
+  event         Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  organizerId   String
+  organizer     User     @relation("BadgeOrders", fields: [organizerId], references: [id])
+  quantity      Int                       // nombre de badges commandés
+  unitCost      Int                       // coût unitaire au moment de la commande (en FCFA)
+  totalAmount   Int                       // quantité × unitCost
+  currency      String   @default("FCFA")
+  status        String   @default("pending")  // pending | paid | cancelled
+  paymentMethod String?                   // mobile_money | card | etc.
+  paymentRef    String?
+  paidAt        DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([eventId])
+  @@index([organizerId])
   @@index([status])
 }
 

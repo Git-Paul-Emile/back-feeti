@@ -341,3 +341,44 @@ export const getSuspectReports = controllerWrapper(async (req: Request, res: Res
   const reports = await accessService.getSuspectReports(eventId, userId, role);
   res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Signalements récupérés", data: reports }));
 });
+
+// ─── Tarification badges ──────────────────────────────────────────────
+
+export const getBadgePricing = controllerWrapper(async (_req: Request, res: Response) => {
+  const pricing = await accessService.getBadgePricing();
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Tarification récupérée", data: pricing }));
+});
+
+export const updateBadgePricing = controllerWrapper(async (req: Request, res: Response) => {
+  const { unitCost } = req.body as { unitCost: number };
+  if (!unitCost || unitCost < 0) throw new Error("unitCost invalide");
+  const pricing = await accessService.updateBadgePricing(Number(unitCost), req.user!.userId);
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Tarification mise à jour", data: pricing }));
+});
+
+// ─── Commandes de badges ──────────────────────────────────────────────
+
+export const createBadgeOrder = controllerWrapper(async (req: Request, res: Response) => {
+  const { eventId, quantity } = req.body as { eventId: string; quantity: number };
+  const order = await accessService.createBadgeOrder({
+    eventId,
+    organizerId: req.user!.userId,
+    quantity: Number(quantity),
+  });
+  res.status(StatusCodes.CREATED).json(jsonResponse({ status: "success", message: "Commande créée", data: order }));
+});
+
+export const payBadgeOrder = controllerWrapper(async (req: Request, res: Response) => {
+  const order = await accessService.simulatePayBadgeOrder(req.params.orderId, req.user!.userId);
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Paiement confirmé (simulation)", data: order }));
+});
+
+export const getMyBadgeOrders = controllerWrapper(async (req: Request, res: Response) => {
+  const orders = await accessService.getOrganizerBadgeOrders(req.user!.userId);
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Commandes récupérées", data: orders }));
+});
+
+export const getAdminBadgeOrders = controllerWrapper(async (_req: Request, res: Response) => {
+  const orders = await accessService.getAdminBadgeOrders();
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Commandes récupérées", data: orders }));
+});
