@@ -369,7 +369,7 @@ export const createBadgeOrder = controllerWrapper(async (req: Request, res: Resp
 });
 
 export const payBadgeOrder = controllerWrapper(async (req: Request, res: Response) => {
-  const order = await accessService.simulatePayBadgeOrder(req.params.orderId, req.user!.userId);
+  const order = await accessService.simulatePayBadgeOrder(req.params.orderId as string, req.user!.userId);
   res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Paiement confirmé (simulation)", data: order }));
 });
 
