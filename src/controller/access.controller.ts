@@ -242,9 +242,9 @@ export const sendStandaloneBadge = controllerWrapper(async (req: Request, res: R
 // ─── Scan ─────────────────────────────────────────────────────────────
 
 export const scanBadge = controllerWrapper(async (req: Request, res: Response) => {
-  const agentId = req.user!.userId;
+  const { userId, role } = req.user!;
   const data = scanSchema.parse(req.body);
-  const result = await accessService.scanBadge(agentId, data);
+  const result = await accessService.scanBadge(userId, role, data);
   res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Scan traité", data: result }));
 });
 
@@ -314,14 +314,6 @@ export const duplicateConfig = controllerWrapper(async (req: Request, res: Respo
   const { sourceEventId } = duplicateConfigSchema.parse(req.body);
   const result = await accessService.duplicateConfig(eventId, normalizeEventId(sourceEventId), userId, role);
   res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Configuration dupliquee", data: result }));
-});
-
-export const getCurrentQr = controllerWrapper(async (req: Request, res: Response) => {
-  const eventId = p(req.params.eventId);
-  const badgeId = p(req.params.badgeId);
-  const { userId, role } = req.user!;
-  const result = await accessService.getCurrentQr(eventId, badgeId, userId, role);
-  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "QR rotatif généré", data: result }));
 });
 
 // ─── Signalement ──────────────────────────────────────────────────────

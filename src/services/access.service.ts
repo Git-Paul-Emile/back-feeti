@@ -3,6 +3,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, 
 import { AppError } from "../utils/AppError.js";
 import { accessRepository } from "../repositories/access.repository.js";
 import { eventRepository } from "../repositories/event.repository.js";
+import { eventControllerRepository } from "../repositories/eventController.repository.js";
 import { prisma } from "../config/database.js";
 import { feetiPlaySyncService } from "./feetiPlaySync.service.js";
 import { firestoreSyncService } from "./firestore-sync.service.js";
@@ -156,31 +157,6 @@ function assertAgentCode(code?: string) {
   }
 }
 
-// ─── Helpers QR rotatif (TOTP window 30s) ─────────────────────────────────
-
-const QR_WINDOW_SECONDS = 30;
-
-function currentWindow(): number {
-  return Math.floor(Date.now() / (QR_WINDOW_SECONDS * 1000));
-}
-
-function generateRotatingQrPayload(badgeId: string, secret: string): string {
-  const w = currentWindow();
-  const sig = createHmac("sha256", secret).update(`${badgeId}:${w}`).digest("hex");
-  return JSON.stringify({ badgeId, w, sig });
-}
-
-function verifyRotatingQrPayload(qrCode: string, secret: string, badgeId: string): boolean {
-  try {
-    const { w, sig } = JSON.parse(qrCode);
-    if (typeof w !== "number") return false;
-    if (Math.abs(currentWindow() - w) > 1) return false; // allow ±30s drift
-    const expected = createHmac("sha256", secret).update(`${badgeId}:${w}`).digest("hex");
-    return sig === expected;
-  } catch {
-    return false;
-  }
-}
 
 // ─── Helpers permissions ────────────────────────────────────────────────────
 
@@ -243,9 +219,8 @@ export const accessService = {
   }) {
     await assertOrganizerOrAdmin(eventId, userId, role);
 
-    const validCodes = ZONE_TEMPLATES.map((z) => z.code);
-    if (!validCodes.includes(data.code as any)) {
-      throw new AppError(`Code zone invalide. Valeurs acceptées : ${validCodes.join(", ")}`, StatusCodes.BAD_REQUEST);
+    if (!/^Z\d+$/.test(data.code)) {
+      throw new AppError(`Code zone invalide. Format attendu : Z suivi d'un numéro (ex: Z1, Z11)`, StatusCodes.BAD_REQUEST);
     }
 
     const existing = await accessRepository.findZoneByCode(eventId, data.code);
@@ -583,15 +558,13 @@ export const accessService = {
 
   // ── SCAN ────────────────────────────────────────────────────────────────
 
-  async scanBadge(agentId: string, data: { qrCode: string; zoneId: string; agentCode?: string }) {
+  async scanBadge(agentId: string, agentRole: string, data: { qrCode: string; zoneId: string; agentCode?: string }) {
     assertAgentCode(data.agentCode);
-    // 1. Parser le QR pour extraire badgeId et détecter le format
+    // 1. Parser le QR pour extraire badgeId
     let parsedBadgeId: string | null = null;
-    let isRotating = false;
     try {
       const raw = JSON.parse(data.qrCode);
       parsedBadgeId = typeof raw.badgeId === "string" ? raw.badgeId : typeof raw.bid === "string" ? raw.bid : null;
-      isRotating = typeof raw.w === "number";
     } catch {
       return { result: "denied" as const, refusalReason: "QR code invalide" };
     }
@@ -608,36 +581,37 @@ export const accessService = {
     if (!badgeRaw.eventId || !badgeRaw.categoryId || !badgeRaw.category) {
       return { result: "denied" as const, refusalReason: "Badge invalide" };
     }
-    // Extraire en constantes pour que le narrowing survive les await
     const bEventId = badgeRaw.eventId;
     const bCategoryId = badgeRaw.categoryId;
     const bCategory = badgeRaw.category;
 
-    // 3. Vérifier la signature selon le format
-    if (isRotating) {
-      if (!verifyRotatingQrPayload(data.qrCode, badgeRaw.qrSecret, badgeRaw.id)) {
-        await accessRepository.createAccessLog({
-          badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
-          scannedById: agentId, result: "denied", refusalReason: "QR rotatif invalide ou expiré",
-        });
-        return { result: "denied" as const, refusalReason: "QR rotatif invalide ou expiré" };
+    // 2b. Vérifier que l'agent est autorisé à scanner pour cet événement
+    const isAdmin = agentRole === "admin" || agentRole === "super_admin";
+    if (!isAdmin) {
+      const event = await eventRepository.findById(bEventId);
+      const isOrganizer = agentRole === "organizer" && event?.organizerId === agentId;
+      if (!isOrganizer) {
+        const assigned = await eventControllerRepository.isAssigned(bEventId, agentId);
+        if (!assigned) {
+          return { result: "denied" as const, refusalReason: "Vous n'êtes pas autorisé à scanner pour cet événement" };
+        }
       }
-    } else {
-      // Format statique : le qrCode doit correspondre au qrCode stocké
-      if (badgeRaw.qrCode !== data.qrCode) {
-        await accessRepository.createAccessLog({
-          badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
-          scannedById: agentId, result: "denied", refusalReason: "QR code invalide",
-        });
-        return { result: "denied" as const, refusalReason: "QR code invalide" };
-      }
-      if (!verifyQrPayload(data.qrCode, badgeRaw.qrSecret)) {
-        await accessRepository.createAccessLog({
-          badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
-          scannedById: agentId, result: "denied", refusalReason: "Signature QR invalide",
-        });
-        return { result: "denied" as const, refusalReason: "Signature QR invalide" };
-      }
+    }
+
+    // 3. Vérifier la signature (format statique uniquement)
+    if (badgeRaw.qrCode !== data.qrCode) {
+      await accessRepository.createAccessLog({
+        badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
+        scannedById: agentId, result: "denied", refusalReason: "QR code invalide",
+      });
+      return { result: "denied" as const, refusalReason: "QR code invalide" };
+    }
+    if (!verifyQrPayload(data.qrCode, badgeRaw.qrSecret)) {
+      await accessRepository.createAccessLog({
+        badgeId: badgeRaw.id, zoneId: data.zoneId, eventId: bEventId,
+        scannedById: agentId, result: "denied", refusalReason: "Signature QR invalide",
+      });
+      return { result: "denied" as const, refusalReason: "Signature QR invalide" };
     }
 
     // 4. Vérifier le statut du badge
@@ -911,21 +885,6 @@ export const accessService = {
   async getSuspectReports(eventId: string, userId: string, role: string) {
     await assertOrganizerOrAdmin(eventId, userId, role);
     return accessRepository.findSuspectReportsByEvent(eventId);
-  },
-
-  // ── QR ROTATIF ──────────────────────────────────────────────────────────
-
-  async getCurrentQr(eventId: string, badgeId: string, userId: string, role: string) {
-    await assertOrganizerOrAdmin(eventId, userId, role);
-    const badge = await accessRepository.findBadgeById(badgeId);
-    if (!badge || badge.eventId !== eventId) throw new AppError("Badge introuvable", StatusCodes.NOT_FOUND);
-    if (badge.status !== "active") throw new AppError("Badge inactif", StatusCodes.BAD_REQUEST);
-    const w = currentWindow();
-    return {
-      qr: generateRotatingQrPayload(badge.id, badge.qrSecret),
-      windowSeconds: QR_WINDOW_SECONDS,
-      nextRefreshAt: (w + 1) * QR_WINDOW_SECONDS * 1000,
-    };
   },
 
   // ─── Tarification badge ──────────────────────────────────────────────

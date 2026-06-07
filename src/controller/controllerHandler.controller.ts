@@ -90,13 +90,13 @@ export const createAndAssignController = controllerWrapper(async (req: Request, 
   );
 });
 
-/** Affecter un contrôleur existant (par email) à un événement */
+/** Affecter un contrôleur existant (par email ou téléphone) à un événement */
 export const assignExistingController = controllerWrapper(async (req: Request, res: Response) => {
   const organizerId = req.user!.userId;
   const { eventId } = req.params;
-  const { email } = req.body;
+  const { email, phone } = req.body;
 
-  if (!email) throw new AppError("email requis", StatusCodes.BAD_REQUEST);
+  if (!email && !phone) throw new AppError("email ou téléphone requis", StatusCodes.BAD_REQUEST);
 
   const event = await eventService.getEventById(eventId);
   if (!event) throw new AppError("Événement introuvable", StatusCodes.NOT_FOUND);
@@ -105,9 +105,17 @@ export const assignExistingController = controllerWrapper(async (req: Request, r
   }
   if (event.organizerId !== organizerId) throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
 
-  const controller = await prisma.user.findUnique({ where: { email } });
-  if (!controller || controller.role !== "controller") {
-    throw new AppError("Aucun contrôleur trouvé avec cet email", StatusCodes.NOT_FOUND);
+  const controller = await prisma.user.findFirst({
+    where: {
+      OR: [
+        ...(email ? [{ email }] : []),
+        ...(phone ? [{ phone }] : []),
+      ],
+      role: "controller",
+    },
+  });
+  if (!controller) {
+    throw new AppError("Aucun contrôleur trouvé avec cet email ou téléphone", StatusCodes.NOT_FOUND);
   }
 
   const assignment = await eventControllerRepository.assign(eventId, controller.id);
@@ -203,6 +211,24 @@ export const updateController = controllerWrapper(async (req: Request, res: Resp
 
   res.status(StatusCodes.OK).json(
     jsonResponse({ status: "success", message: "Contrôleur mis à jour", data: updated })
+  );
+});
+
+/** Lister les contrôleurs déjà affectés à au moins un événement de l'organisateur */
+export const listAllControllers = controllerWrapper(async (req: Request, res: Response) => {
+  const organizerId = req.user!.userId;
+  const controllers = await prisma.user.findMany({
+    where: {
+      role: "controller",
+      assignedEvents: {
+        some: { event: { organizerId } },
+      },
+    },
+    select: { id: true, name: true, email: true, phone: true },
+    orderBy: { name: "asc" },
+  });
+  res.status(StatusCodes.OK).json(
+    jsonResponse({ status: "success", message: "Contrôleurs récupérés", data: controllers })
   );
 });
 

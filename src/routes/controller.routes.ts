@@ -4,6 +4,7 @@ import {
   createAndAssignController,
   assignExistingController,
   listEventControllers,
+  listAllControllers,
   removeController,
   updateController,
   getMyAssignedEvents,
@@ -12,6 +13,14 @@ import {
 } from "../controller/controllerHandler.controller.js";
 
 const router = Router();
+
+// ── Liste globale des contrôleurs (pour organisateur) ────────────────────────
+router.get(
+  "/all",
+  authenticate,
+  requireRole("organizer", "admin", "super_admin"),
+  listAllControllers
+);
 
 // ── Organisateur : gérer les contrôleurs d'un événement ──────────────────────
 router.post(

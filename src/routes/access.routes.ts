@@ -8,7 +8,7 @@ import {
   // Droits d'accès
   setAccessRights, applyDefaultMatrix, getAccessMatrix,
   // Badges liés à un événement
-  generateBadge, getBadges, sendBadge, sendBadgeSms, revokeBadge, regenerateBadge, getCurrentQr,
+  generateBadge, getBadges, sendBadge, sendBadgeSms, revokeBadge, regenerateBadge,
   // Badges indépendants
   generateStandaloneBadge, getStandaloneBadges, revokeStandaloneBadge, sendStandaloneBadge,
   // Scan
@@ -52,7 +52,6 @@ router.post  ("/events/:eventId/badges/:badgeId/send",          authenticate, or
 router.post  ("/events/:eventId/badges/:badgeId/send-sms",      authenticate, orgOrAdmin, sendBadgeSms);
 router.post  ("/events/:eventId/badges/:badgeId/revoke",        authenticate, orgOrAdmin, revokeBadge);
 router.post  ("/events/:eventId/badges/:badgeId/regenerate",    authenticate, orgOrAdmin, regenerateBadge);
-router.get   ("/events/:eventId/badges/:badgeId/qr",            authenticate, orgOrAdmin, getCurrentQr);
 
 // ── Badges indépendants (sans événement obligatoire) ──────────────────
 router.post  ("/badges/standalone",              authenticate, orgOrAdmin, generateStandaloneBadge);
