@@ -183,7 +183,7 @@ export const accessRepository = {
   async updateBadge(id: string, data: Partial<{
     status: BadgeStatus;
     sentAt: Date;
-    revokedAt: Date;
+    revokedAt: Date | null;
     revokedById: string | null;
     qrCode: string;
     qrSecret: string;
