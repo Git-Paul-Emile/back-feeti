@@ -184,7 +184,7 @@ export const accessRepository = {
     status: BadgeStatus;
     sentAt: Date;
     revokedAt: Date;
-    revokedById: string;
+    revokedById: string | null;
     qrCode: string;
     qrSecret: string;
     holderPhone: string;

@@ -42,6 +42,8 @@ const mocks = vi.hoisted(() => ({
   // event repository
   findById: vi.fn(),
   createEvent: vi.fn().mockResolvedValue({}),
+  // controller assignments
+  isAssigned: vi.fn(),
   // feetiPlay
   getLiveEventById: vi.fn().mockResolvedValue(null),
   feetiPlaySync: vi.fn().mockResolvedValue(undefined),
@@ -89,6 +91,12 @@ vi.mock("../repositories/event.repository.js", () => ({
   eventRepository: {
     findById: mocks.findById,
     create: mocks.createEvent,
+  },
+}));
+
+vi.mock("../repositories/eventController.repository.js", () => ({
+  eventControllerRepository: {
+    isAssigned: mocks.isAssigned,
   },
 }));
 
@@ -227,6 +235,48 @@ describe("applyDefaultZones", () => {
 });
 
 // ═════════════════════════════════════════════════════════════════════
+// GROUPE 2B — getZones : accès contrôleur affecté
+// ═════════════════════════════════════════════════════════════════════
+
+describe("getZones", () => {
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findById.mockResolvedValue({ id: "event-1", organizerId: "org-1" });
+    mocks.findZonesByEvent.mockResolvedValue([{ id: "zone-1", code: "Z1", name: "Accès Général" }]);
+  });
+
+  it("autorise un contrôleur affecté à lire les zones", async () => {
+    mocks.isAssigned.mockResolvedValue(true);
+
+    const zones = await accessService.getZones("event-1", "ctrl-1", "controller");
+
+    expect(mocks.isAssigned).toHaveBeenCalledWith("event-1", "ctrl-1");
+    expect(zones).toHaveLength(1);
+  });
+
+  it("crée les zones par défaut si l'événement n'en a aucune", async () => {
+    mocks.isAssigned.mockResolvedValue(true);
+    mocks.findZonesByEvent.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      { id: "zone-1", code: "Z1", name: "Accès Général" },
+    ]);
+
+    const zones = await accessService.getZones("event-1", "ctrl-1", "controller");
+
+    expect(mocks.createZone).toHaveBeenCalledTimes(10);
+    expect(zones).toHaveLength(1);
+  });
+
+  it("refuse un contrôleur non affecté", async () => {
+    mocks.isAssigned.mockResolvedValue(false);
+
+    await expect(
+      accessService.getZones("event-1", "ctrl-1", "controller")
+    ).rejects.toMatchObject({ statusCode: StatusCodes.FORBIDDEN });
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════
 // GROUPE 3 — scanBadge : cas d'erreur
 // ═════════════════════════════════════════════════════════════════════
 
@@ -242,7 +292,6 @@ describe("scanBadge — validation des QR codes", () => {
     const result = await accessService.scanBadge("ctrl-1", {
       qrCode: "ceci-nest-pas-du-json-valide",
       zoneId: "zone-1",
-      agentCode: "FEETI-AGENT",
     });
 
     expect(result.result).toBe("denied");
@@ -254,7 +303,6 @@ describe("scanBadge — validation des QR codes", () => {
     const result = await accessService.scanBadge("ctrl-1", {
       qrCode: noIdQr,
       zoneId: "zone-1",
-      agentCode: "FEETI-AGENT",
     });
 
     expect(result.result).toBe("denied");
@@ -267,21 +315,19 @@ describe("scanBadge — validation des QR codes", () => {
     const result = await accessService.scanBadge("ctrl-1", {
       qrCode: qrWithBid,
       zoneId: "zone-1",
-      agentCode: "FEETI-AGENT",
     });
 
     expect(result.result).toBe("denied");
     expect(result.refusalReason).toMatch(/introuvable/i);
   });
 
-  it("lève UNAUTHORIZED si le code agent est manquant", async () => {
-    await expect(
-      accessService.scanBadge("ctrl-1", {
-        qrCode: "{}",
-        zoneId: "zone-1",
-        // agentCode absent → UNAUTHORIZED
-      })
-    ).rejects.toMatchObject({ statusCode: StatusCodes.UNAUTHORIZED });
+  it("accepte un scan sans code agent", async () => {
+    const result = await accessService.scanBadge("ctrl-1", {
+      qrCode: "{}",
+      zoneId: "zone-1",
+    });
+
+    expect(result.result).toBe("denied");
   });
 });
 
@@ -294,6 +340,7 @@ describe("generateBadge — validation RBAC", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findCategoryById.mockResolvedValue(null);
+    mocks.findBadgesByEvent.mockResolvedValue([]);
   });
 
   it("lève NOT_FOUND si l'événement n'existe pas", async () => {
@@ -318,6 +365,53 @@ describe("generateBadge — validation RBAC", () => {
         holderEmail: "jean@test.cm",
       })
     ).rejects.toMatchObject({ statusCode: StatusCodes.FORBIDDEN });
+  });
+
+  it("lève CONFLICT si un badge existe déjà pour le même email", async () => {
+    mocks.findById.mockResolvedValue({ id: "event-1", organizerId: "org-1" });
+    mocks.findCategoryById.mockResolvedValue({ id: "cat-1", eventId: "event-1" });
+    mocks.findBadgesByEvent.mockResolvedValue([{ holderEmail: "jean@test.cm" }]);
+
+    await expect(
+      accessService.generateBadge("event-1", "org-1", "organizer", {
+        categoryId: "cat-1",
+        holderName: "Jean Dupont",
+        holderEmail: "Jean@Test.cm",
+      })
+    ).rejects.toMatchObject({ statusCode: StatusCodes.CONFLICT });
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════
+// GROUPE 4B — activateBadge : réactivation d'un badge révoqué
+// ═════════════════════════════════════════════════════════════════════
+
+describe("activateBadge — toggle du statut", () => {
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.findById.mockResolvedValue({ id: "event-1", organizerId: "org-1" });
+    mocks.findBadgeById.mockResolvedValue({
+      id: "badge-1",
+      eventId: "event-1",
+      status: "revoked",
+    });
+    mocks.updateBadge.mockResolvedValue({
+      id: "badge-1",
+      eventId: "event-1",
+      status: "active",
+    });
+  });
+
+  it("réactive un badge révoqué", async () => {
+    const badge = await accessService.activateBadge("event-1", "badge-1", "org-1", "organizer");
+
+    expect(badge.status).toBe("active");
+    expect(mocks.updateBadge).toHaveBeenCalledWith("badge-1", {
+      status: "active",
+      revokedAt: null,
+      revokedById: null,
+    });
   });
 });
 

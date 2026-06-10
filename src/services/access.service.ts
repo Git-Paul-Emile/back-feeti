@@ -125,6 +125,15 @@ function verifyQrPayload(qrCode: string, secret: string): { badgeId: string; eve
   }
 }
 
+function normalizeBadgeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function hasDuplicateBadgeEmail(existingBadges: { holderEmail: string }[], holderEmail: string): boolean {
+  const email = normalizeBadgeEmail(holderEmail);
+  return existingBadges.some((badge) => normalizeBadgeEmail(badge.holderEmail) === email);
+}
+
 function buildBadgePayload(badge: {
   id: string;
   eventId: string;
@@ -244,8 +253,29 @@ export const accessService = {
   },
 
   async getZones(eventId: string, userId: string, role: string) {
-    await assertOrganizerOrAdmin(eventId, userId, role);
-    return accessRepository.findZonesByEvent(eventId);
+    const event = await eventRepository.findById(eventId);
+    if (!event) throw new AppError("Événement introuvable", StatusCodes.NOT_FOUND);
+
+    const isAdmin = role === "admin" || role === "super_admin";
+    const isOrganizer = role === "organizer" && event.organizerId === userId;
+    const isAssignedController = role === "controller" && await eventControllerRepository.isAssigned(eventId, userId);
+
+    if (!isAdmin && !isOrganizer && !isAssignedController) {
+      throw new AppError("Accès refusé", StatusCodes.FORBIDDEN);
+    }
+
+    let zones = await accessRepository.findZonesByEvent(eventId);
+    if (zones.length === 0 && (isAdmin || isOrganizer || isAssignedController)) {
+      const existingCodes = new Set<string>();
+      await Promise.all(
+        ZONE_TEMPLATES
+          .filter((t) => !existingCodes.has(t.code))
+          .map((t) => accessRepository.createZone({ eventId, ...t }))
+      );
+      zones = await accessRepository.findZonesByEvent(eventId);
+    }
+
+    return zones;
   },
 
   async updateZone(eventId: string, zoneId: string, userId: string, role: string, data: {
@@ -386,6 +416,11 @@ export const accessService = {
     const cat = await accessRepository.findCategoryById(data.categoryId);
     if (!cat || cat.eventId !== eventId) throw new AppError("Catégorie introuvable", StatusCodes.NOT_FOUND);
 
+    const existingBadges = await accessRepository.findBadgesByEvent(eventId);
+    if (hasDuplicateBadgeEmail(existingBadges, data.holderEmail)) {
+      throw new AppError("Un badge existe déjà pour cet email sur cet événement", StatusCodes.CONFLICT);
+    }
+
     const badgeId = randomUUID();
     const secret = randomUUID();
     const qrCode = generateLegacyQrPayload(badgeId, eventId, data.categoryId, secret);
@@ -408,6 +443,63 @@ export const accessService = {
     if (!hydrated) throw new AppError("Badge introuvable apres creation", StatusCodes.INTERNAL_SERVER_ERROR);
     const finalQr = generateQrPayload(buildBadgePayload(hydrated as any), secret);
     return accessRepository.updateBadge(badge.id, { qrCode: finalQr });
+  },
+
+  async generateBulkBadges(eventId: string, userId: string, role: string, data: {
+    badges: { holderName: string; holderEmail: string; holderPhone?: string; categoryId?: string; categoryName?: string }[];
+  }) {
+    await assertOrganizerOrAdmin(eventId, userId, role);
+
+    const cats = await accessRepository.findCategoriesByEvent(eventId);
+    if (cats.length === 0) throw new AppError("Aucune catégorie configurée pour cet événement", StatusCodes.BAD_REQUEST);
+
+    const existingBadges = await accessRepository.findBadgesByEvent(eventId);
+    const existingEmails = new Set(existingBadges.map((badge) => normalizeBadgeEmail(badge.holderEmail)));
+    const batchEmails = new Set<string>();
+    for (const badge of data.badges) {
+      const email = normalizeBadgeEmail(badge.holderEmail);
+      if (existingEmails.has(email)) {
+        throw new AppError(`Un badge existe déjà pour l'email ${badge.holderEmail} sur cet événement`, StatusCodes.CONFLICT);
+      }
+      if (batchEmails.has(email)) {
+        throw new AppError(`Le fichier contient plusieurs badges pour l'email ${badge.holderEmail}`, StatusCodes.CONFLICT);
+      }
+      batchEmails.add(email);
+    }
+
+    const catById  = new Map(cats.map(c => [c.id, c]));
+    const catByName = new Map(cats.map(c => [c.name.toLowerCase().trim(), c]));
+    const defaultCat = cats[0];
+
+    const results = await Promise.all(
+      data.badges.map(async b => {
+        let cat = b.categoryId ? catById.get(b.categoryId) : undefined;
+        if (!cat && b.categoryName) cat = catByName.get(b.categoryName.toLowerCase().trim());
+        if (!cat) cat = defaultCat;
+
+        const badgeId = randomUUID();
+        const secret  = randomUUID();
+        const qrCode  = generateLegacyQrPayload(badgeId, eventId, cat.id, secret);
+
+        const badge = await accessRepository.createBadge({
+          eventId,
+          categoryId:  cat.id,
+          holderName:  b.holderName,
+          holderEmail: b.holderEmail,
+          createdById: userId,
+          ...(b.holderPhone && { holderPhone: b.holderPhone }),
+          qrCode,
+          qrSecret: secret,
+        });
+
+        const hydrated = await accessRepository.findBadgeById(badge.id);
+        if (!hydrated) return badge;
+        const finalQr = generateQrPayload(buildBadgePayload(hydrated as any), secret);
+        return accessRepository.updateBadge(badge.id, { qrCode: finalQr });
+      })
+    );
+
+    return results;
   },
 
   async getBadges(eventId: string, userId: string, role: string) {
@@ -546,6 +638,14 @@ export const accessService = {
     return accessRepository.updateBadge(badgeId, { status: "revoked", revokedAt: new Date(), revokedById: userId });
   },
 
+  async activateBadge(eventId: string, badgeId: string, userId: string, role: string) {
+    await assertOrganizerOrAdmin(eventId, userId, role);
+    const badge = await accessRepository.findBadgeById(badgeId);
+    if (!badge || badge.eventId !== eventId) throw new AppError("Badge introuvable", StatusCodes.NOT_FOUND);
+    if (badge.status === "active") throw new AppError("Badge déjà actif", StatusCodes.BAD_REQUEST);
+    return accessRepository.updateBadge(badgeId, { status: "active", revokedAt: null, revokedById: null });
+  },
+
   async regenerateBadge(eventId: string, badgeId: string, userId: string, role: string) {
     await assertOrganizerOrAdmin(eventId, userId, role);
     const badge = await accessRepository.findBadgeById(badgeId);
@@ -559,7 +659,6 @@ export const accessService = {
   // ── SCAN ────────────────────────────────────────────────────────────────
 
   async scanBadge(agentId: string, agentRole: string, data: { qrCode: string; zoneId: string; agentCode?: string }) {
-    assertAgentCode(data.agentCode);
     // 1. Parser le QR pour extraire badgeId
     let parsedBadgeId: string | null = null;
     try {

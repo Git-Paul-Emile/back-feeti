@@ -4,6 +4,7 @@ import { ticketRepository } from "../repositories/ticket.repository.js";
 import { eventRepository } from "../repositories/event.repository.js";
 import { eventService } from "./event.service.js";
 import { prisma } from "../config/database.js";
+import { loyaltyService } from "./loyalty.service.js";
 import { randomUUID } from "crypto";
 import { createHmac } from "crypto";
 
@@ -123,6 +124,10 @@ export const ticketService = {
     // Update attendees count
     await eventRepository.update(data.eventId, { attendees: event.attendees + totalQty });
 
+    // Créditer les points Feeti Na Feeti (fire-and-forget — ne bloque pas la réponse)
+    const totalAmount = data.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
+    loyaltyService.onTicketPurchase(data.userId, totalAmount, tickets[0]?.id ?? orderId).catch(() => {});
+
     return { orderId, tickets, deliveryFee, organizerId: event.organizerId };
   },
 
@@ -190,6 +195,10 @@ export const ticketService = {
     if (ticket.status !== "valid") throw new AppError("Ce billet n'est pas valide", StatusCodes.BAD_REQUEST);
 
     const updated = await ticketRepository.updateStatus(ticket.id, "used", new Date());
+
+    // Créditer les points de présence Feeti Na Feeti (fire-and-forget)
+    loyaltyService.onEventAttendance(ticket.userId, ticket.eventId).catch(() => {});
+
     return { ticket: updated, message: "Billet validé avec succès" };
   },
 

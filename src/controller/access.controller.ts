@@ -12,6 +12,7 @@ import {
   updateCategorySchema,
   setAccessRightsSchema,
   generateBadgeSchema,
+  generateBulkBadgesSchema,
   generateStandaloneBadgeSchema,
   scanSchema,
   syncOfflineSchema,
@@ -166,6 +167,15 @@ export const generateBadge = controllerWrapper(async (req: Request, res: Respons
   res.status(StatusCodes.CREATED).json(jsonResponse({ status: "success", message: "Badge généré", data: badge }));
 });
 
+export const generateBulkBadges = controllerWrapper(async (req: Request, res: Response) => {
+  const eventId = p(req.params.eventId);
+  const { userId, role } = req.user!;
+  const data = generateBulkBadgesSchema.parse(req.body);
+  const badges = await accessService.generateBulkBadges(eventId, userId, role, data);
+  await auditAccessAction(req, "ACCESS_BADGES_BULK_GENERATED", "AccessBadge", eventId, { count: badges.length });
+  res.status(StatusCodes.CREATED).json(jsonResponse({ status: "success", message: `${badges.length} badges générés`, data: badges }));
+});
+
 export const getBadges = controllerWrapper(async (req: Request, res: Response) => {
   const eventId = p(req.params.eventId);
   const { userId, role } = req.user!;
@@ -197,6 +207,15 @@ export const revokeBadge = controllerWrapper(async (req: Request, res: Response)
   const badge = await accessService.revokeBadge(eventId, badgeId, userId, role);
   await auditAccessAction(req, "ACCESS_BADGE_REVOKED", "AccessBadge", badgeId, { eventId });
   res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Badge révoqué", data: badge }));
+});
+
+export const activateBadge = controllerWrapper(async (req: Request, res: Response) => {
+  const eventId = p(req.params.eventId);
+  const badgeId = p(req.params.badgeId);
+  const { userId, role } = req.user!;
+  const badge = await accessService.activateBadge(eventId, badgeId, userId, role);
+  await auditAccessAction(req, "ACCESS_BADGE_ACTIVATED", "AccessBadge", badgeId, { eventId });
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Badge activé", data: badge }));
 });
 
 export const regenerateBadge = controllerWrapper(async (req: Request, res: Response) => {

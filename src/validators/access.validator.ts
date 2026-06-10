@@ -85,10 +85,21 @@ export const duplicateConfigSchema = z.object({
   sourceEventId: z.string().min(1),
 });
 
+export const generateBulkBadgesSchema = z.object({
+  badges: z.array(z.object({
+    holderName:   z.string().min(2).max(100),
+    holderEmail:  z.string().email(),
+    holderPhone:  z.string().min(6).max(30).optional(),
+    categoryId:   z.string().optional(),
+    categoryName: z.string().optional(),
+  })).min(1).max(500),
+});
+
 export type CreateZoneInput = z.infer<typeof createZoneSchema>;
 export type CreateCategoryInput = z.infer<typeof createCategorySchema>;
 export type SetAccessRightsInput = z.infer<typeof setAccessRightsSchema>;
 export type GenerateBadgeInput = z.infer<typeof generateBadgeSchema>;
+export type GenerateBulkBadgesInput = z.infer<typeof generateBulkBadgesSchema>;
 export type GenerateStandaloneBadgeInput = z.infer<typeof generateStandaloneBadgeSchema>;
 export type ScanInput = z.infer<typeof scanSchema>;
 export type SyncOfflineInput = z.infer<typeof syncOfflineSchema>;
