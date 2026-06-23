@@ -28,6 +28,8 @@ import accessRouter from "../routes/access.routes.js";
 import chatbotRouter from "../routes/chatbot.routes.js";
 import promotionRouter from "../routes/promotion.routes.js";
 import establishmentRouter from "../routes/establishment.routes.js";
+import notificationRouter from "../routes/notification.routes.js";
+import creatorRouter from "../routes/creator.routes.js";
 
 const app = express();
 
@@ -109,6 +111,10 @@ app.use('/api/access', accessRouter);
 app.use('/api/chatbot', chatbotRouter);
 // ─── Promotions self-service ──────────────────────────────────────────────────
 app.use('/api/promotion', promotionRouter);
+// ─── Notifications (email, SMS, push) ─────────────────────────────────────────
+app.use('/api/notifications', notificationRouter);
+// ─── Système créateur / influenceur ──────────────────────────────────────────
+app.use('/api/creators', creatorRouter);
 // ─── Espace propriétaires d'établissement ────────────────────────────────────
 app.use('/api/establishment', establishmentRouter);
 

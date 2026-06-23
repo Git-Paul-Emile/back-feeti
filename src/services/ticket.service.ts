@@ -5,6 +5,7 @@ import { eventRepository } from "../repositories/event.repository.js";
 import { eventService } from "./event.service.js";
 import { prisma } from "../config/database.js";
 import { loyaltyService } from "./loyalty.service.js";
+import { firestoreSyncService } from "./firestore-sync.service.js";
 import { randomUUID } from "crypto";
 import { createHmac } from "crypto";
 
@@ -102,6 +103,19 @@ export const ticketService = {
           deliveryMethod: data.delivery?.method === "physical" ? "physical" : "email",
           deliveryStatus: data.delivery?.method === "physical" ? "pending" : undefined,
         });
+
+        // Sync ticket vers Firestore (fire-and-forget)
+        firestoreSyncService.syncTicket({
+          id: ticket.id,
+          eventId: ticket.eventId,
+          userId: ticket.userId,
+          type: ticket.category,
+          status: ticket.status,
+          qrCode: ticket.qrData,
+          usedAt: ticket.usedAt,
+          createdAt: ticket.createdAt,
+          updatedAt: ticket.updatedAt,
+        }).catch(() => {});
 
         // Créer l'adresse de livraison pour le premier billet seulement
         if (data.delivery?.method === "physical" && i === 0 && item === data.items[0]) {

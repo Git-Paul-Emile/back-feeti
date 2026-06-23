@@ -85,6 +85,10 @@ model User {
   // Établissement owner
   establishmentSubscriptions  EstablishmentSubscription[]
   dealPayments                DealPayment[]
+  // Système créateur
+  creatorProfile          Creator?          @relation("UserCreatorProfile")
+  createdCampaigns        CreatorCampaign[] @relation("OrganizerCampaigns")
+  organizedCollabs        CreatorCollaboration[] @relation("OrganizerCollabs")
 }
 
 model UserFavorite {
@@ -1167,23 +1171,126 @@ model BadgeOrder {
 
 // ─── Paiement pour la publication d'un bon plan ──────────────────────────────
 model DealPayment {
-  id            String   @id @default(cuid())
+  id            String      @id @default(cuid())
   dealId        String?
-  deal          Deal?    @relation(fields: [dealId], references: [id])
+  deal          Deal?       @relation(fields: [dealId], references: [id])
   userId        String
-  user          User     @relation(fields: [userId], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
   leisureItemId String
   leisureItem   LeisureItem @relation(fields: [leisureItemId], references: [id])
   amount        Float
-  currency      String   @default("FCFA")
-  status        String   @default("pending") // pending | paid | failed
+  currency      String      @default("FCFA")
+  status        String      @default("pending") // pending | paid | failed
   paymentMethod String?
   paymentRef    String?
-  dealData      String?  // JSON du bon plan en attente de paiement
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  dealData      String?     // JSON du bon plan en attente de paiement
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@index([userId])
   @@index([leisureItemId])
+  @@index([status])
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+//  SYSTÈME CRÉATEUR / INFLUENCEUR
+// ═══════════════════════════════════════════════════════════════════════
+
+model Creator {
+  id                 String    @id @default(cuid())
+  userId             String    @unique
+  user               User      @relation("UserCreatorProfile", fields: [userId], references: [id], onDelete: Cascade)
+  bio                String?
+  niche              String?
+  audienceSize       Int?      @default(0)
+  engagementRate     Float?    @default(0)
+  rating             Float?    @default(0)
+  reviewCount        Int       @default(0)
+  socialLinks        Json      @default("{}")
+  portfolio          String?
+  isVerified         Boolean   @default(false)
+  isActive           Boolean   @default(true)
+  collaborationCount Int       @default(0)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  applications   CreatorCampaignApplication[] @relation("CreatorApplications")
+  collaborations CreatorCollaboration[]       @relation("CreatorCollabs")
+
+  @@index([isActive])
+  @@index([niche])
+  @@index([isVerified])
+  @@index([userId])
+}
+
+model CreatorCampaign {
+  id              String   @id @default(cuid())
+  title           String
+  description     String
+  organizerId     String
+  organizer       User     @relation("OrganizerCampaigns", fields: [organizerId], references: [id])
+  budget          Int
+  currency        String   @default("FCFA")
+  niche           String?
+  minAudience     Int?
+  requirements    String?
+  deliverables    String?
+  startDate       String?
+  endDate         String
+  status          String   @default("open")
+  selectedCount   Int      @default(0)
+  maxCreators     Int      @default(10)
+  rating          Float?   @default(0)
+  reviewCount     Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  applications   CreatorCampaignApplication[] @relation("CampaignApplications")
+  collaborations CreatorCollaboration[]       @relation("CampaignCollabs")
+
+  @@index([organizerId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model CreatorCampaignApplication {
+  id         String            @id @default(cuid())
+  campaignId String
+  campaign   CreatorCampaign   @relation("CampaignApplications", fields: [campaignId], references: [id], onDelete: Cascade)
+  creatorId  String
+  creator    Creator           @relation("CreatorApplications", fields: [creatorId], references: [id], onDelete: Cascade)
+  message    String?
+  status     String            @default("pending")
+  reviewedAt DateTime?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  @@unique([campaignId, creatorId])
+  @@index([campaignId])
+  @@index([creatorId])
+  @@index([status])
+}
+
+model CreatorCollaboration {
+  id          String        @id @default(cuid())
+  campaignId  String
+  campaign    CreatorCampaign @relation("CampaignCollabs", fields: [campaignId], references: [id], onDelete: Cascade)
+  creatorId   String
+  creator     Creator       @relation("CreatorCollabs", fields: [creatorId], references: [id], onDelete: Cascade)
+  organizerId String
+  organizer   User          @relation("OrganizerCollabs", fields: [organizerId], references: [id])
+  agreedFee   Int
+  currency    String        @default("FCFA")
+  deliverables String?
+  status      String        @default("negotiating")
+  rating      Float?
+  review      String?
+  paidAt      DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([campaignId])
+  @@index([creatorId])
+  @@index([organizerId])
   @@index([status])
 }

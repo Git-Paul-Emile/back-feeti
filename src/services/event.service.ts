@@ -7,6 +7,7 @@ import { ticketRepository } from "../repositories/ticket.repository.js";
 import { prisma } from "../config/database.js";
 import { feetiPlaySyncService } from "./feetiPlaySync.service.js";
 import { firestoreSyncService } from "./firestore-sync.service.js";
+import { db } from "../config/firebase-admin.js";
 
 const FEETIPLAY_LIVE_ID_PREFIX = "feeti2_live_";
 
@@ -232,14 +233,43 @@ export const eventService = {
       throw new AppError("Événement introuvable", StatusCodes.NOT_FOUND);
     }
     const isFavorited = await eventRepository.toggleFavorite(userId, eventId);
+
+    firestoreSyncService.syncDocument({
+      collection: "user_favorites",
+      id: `${userId}-${eventId}`,
+      data: {
+        userId,
+        eventId,
+        isFavorited,
+        createdAt: new Date().toISOString(),
+      },
+    }).catch((err) => {
+      logger.error(`Erreur sync favori Firestore pour event ${eventId}:`, err);
+    });
+
     return { isFavorited };
   },
 
   async isFavorited(userId: string, eventId: string) {
-    return eventRepository.isFavorited(userId, eventId);
+    // Vérifier d'abord dans PostgreSQL (favoris Feeti2 ou synchronisés depuis FeetiPlay)
+    const localFav = await eventRepository.isFavorited(userId, eventId);
+    if (localFav) return true;
+
+    // Pour les événements FeetiPlay Live (avec préfixe), vérifier aussi dans Firestore
+    if (isFeetiPlayLiveId(eventId)) {
+      const localId = eventId.replace(FEETIPLAY_LIVE_ID_PREFIX, "");
+      // Le favori est synchronisé avec l'ID local (sans préfixe)
+      const syncedFav = await prisma.userFavorite.findUnique({
+        where: { userId_eventId: { userId, eventId: localId } },
+      });
+      if (syncedFav) return true;
+    }
+
+    return false;
   },
 
   async getMyFavorites(userId: string) {
+    // Les favoris sont synchronisés depuis FeetiPlay via l'endpoint, on les récupère depuis PostgreSQL
     return eventRepository.findFavoritesByUser(userId);
   },
 

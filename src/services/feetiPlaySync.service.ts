@@ -47,6 +47,27 @@ interface SyncPayload {
   location: string;
 }
 
+interface FavoriteSyncPayload {
+  userId: string;
+  eventId: string;
+  source: "feetiplay";
+}
+
+interface TicketSyncPayload {
+  id: string;
+  eventId: string;
+  userId: string;
+  category: string;
+  price: number;
+  currency: string;
+  holderName: string;
+  holderEmail: string;
+  qrData: string;
+  orderId: string;
+  deliveryMethod?: "email" | "physical";
+  source: "feetiplay";
+}
+
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const text = await response.text();
@@ -54,11 +75,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
   }
 
   const json = (await response.json()) as { data?: T };
-  if (!json.data) {
+  if (!json.data && !Array.isArray(json)) {
     throw new Error("FEETIPLAY sync returned an empty payload");
   }
 
-  return json.data;
+  return (json.data ?? json) as T;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -97,6 +118,20 @@ export const feetiPlaySyncService = {
   async deleteLiveEvent(id: string): Promise<void> {
     await request<{ deleted: true }>(`/integration/feeti2-live-events/${encodeURIComponent(id)}`, {
       method: "DELETE",
+    });
+  },
+
+  async syncFavoriteFromFeetiPlay(payload: FavoriteSyncPayload): Promise<{ synced: boolean }> {
+    return request<{ synced: boolean }>("/integration/feetiplay/favorites", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async syncTicketFromFeetiPlay(payload: TicketSyncPayload): Promise<{ synced: boolean }> {
+    return request<{ synced: boolean }>("/integration/feetiplay/tickets", {
+      method: "POST",
+      body: JSON.stringify(payload),
     });
   },
 };
