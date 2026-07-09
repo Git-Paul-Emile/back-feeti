@@ -18,8 +18,8 @@ export const registerSchema = z.object({
     .regex(/[0-9]/, "Le mot de passe doit contenir au moins un chiffre"),
   role: z.enum(["user", "organizer"]).optional(),
   interests: z.array(z.string()).optional(),
-  country: z.string().min(1, "Le pays est requis").optional(),
-  city: z.string().min(1, "La ville est requise").optional(),
+  country: z.string().min(1, "Le pays est requis"),
+  city: z.string().min(1, "La ville est requise"),
 });
 
 export const loginSchema = z.object({
@@ -64,6 +64,10 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 // ── Firebase Auth Schemas ──────────────────────────────────────────────────
+// Google ne fournit que idToken/name/email/photo — le complément de profil
+// (country, city) doit rester obligatoire ici, exactement comme pour
+// l'inscription email/password, pour qu'un appel API direct ne puisse pas
+// créer de profil incomplet en contournant GoogleCompletionPage côté front.
 export const firebaseRegisterSchema = z.object({
   idToken: z.string().min(1, "Le token Firebase est requis"),
   name: z
@@ -78,8 +82,8 @@ export const firebaseRegisterSchema = z.object({
     .or(z.literal("")),
   role: z.enum(["user", "organizer"]).optional(),
   interests: z.array(z.string()).optional(),
-  country: z.string().min(1, "Le pays est requis").optional(),
-  city: z.string().min(1, "La ville est requise").optional(),
+  country: z.string().min(1, "Le pays est requis"),
+  city: z.string().min(1, "La ville est requise"),
 });
 
 export const firebaseLoginSchema = z.object({
@@ -88,19 +92,3 @@ export const firebaseLoginSchema = z.object({
 
 export type FirebaseRegisterInput = z.infer<typeof firebaseRegisterSchema>;
 export type FirebaseLoginInput = z.infer<typeof firebaseLoginSchema>;
-
-export const forgotPasswordSchema = z.object({
-  email: z.string().email("Adresse email invalide"),
-});
-
-export const resetPasswordSchema = z.object({
-  token: z.string().min(1, "Le token est requis"),
-  newPassword: z
-    .string()
-    .min(8, "Le mot de passe doit contenir au moins 8 caractères")
-    .regex(/[A-Z]/, "Le mot de passe doit contenir au moins une majuscule")
-    .regex(/[0-9]/, "Le mot de passe doit contenir au moins un chiffre"),
-});
-
-export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
-export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

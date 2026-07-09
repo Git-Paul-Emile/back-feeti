@@ -3,10 +3,11 @@ import { redisForWorker } from "../config/redis.js";
 import { emailService } from "../services/email.service.js";
 import { pandadocService } from "../services/pandadoc.service.js";
 import type { EmailJobData } from "./email.queue.js";
+import { logger } from "../utils/logger.js";
 
 async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
   const d = job.data;
-  console.log(`[email-queue] processing job ${job.id} (${d.type} → ${d.to})`);
+  logger.info(`[email-queue] processing job ${job.id} (${d.type} → ${d.to})`);
 
   switch (d.type) {
     case "welcome-user":
@@ -37,10 +38,6 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
       await emailService.sendTicketConfirmation(d.to, d.data);
       break;
 
-    case "password-reset":
-      await emailService.sendPasswordReset(d.to, { userName: d.userName, resetUrl: d.resetUrl });
-      break;
-
     case "password-changed":
       await emailService.sendPasswordChanged(d.to, { userName: d.userName });
       break;
@@ -62,7 +59,7 @@ export function startEmailWorker(): Worker<EmailJobData> {
   });
 
   worker.on("completed", (job) => {
-    console.log(`[email-queue] ✓ job ${job.id} (${job.data.type} → ${job.data.to})`);
+    logger.info(`[email-queue] ✓ job ${job.id} (${job.data.type} → ${job.data.to})`);
   });
 
   worker.on("failed", (job, err) => {
@@ -74,6 +71,6 @@ export function startEmailWorker(): Worker<EmailJobData> {
     console.error(`[email-queue] worker error — ${err.message}`, err);
   });
 
-  console.log("[email-queue] worker démarré (concurrency: 5)");
+  logger.info("[email-queue] worker démarré (concurrency: 5)");
   return worker;
 }

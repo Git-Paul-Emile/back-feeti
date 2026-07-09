@@ -6,6 +6,7 @@ import {
   getMobileMoneyStatus,
   initializePaystack,
   confirmPaymentAndPurchase,
+  verifyPayment,
 } from "../controllers/payment.controller.js";
 
 const router = Router();
@@ -28,5 +29,9 @@ router.post("/paystack/initialize", initializePaystack);
 // ─── Confirmation paiement + création billets ─────────────────────────
 // POST /api/payments/confirm  (requiert auth)
 router.post("/confirm", authenticate, confirmPaymentAndPurchase);
+
+// ─── Vérification seule (service-à-service, ex. FeetiPlay) ────────────
+// POST /api/payments/verify  (protégé par x-feeti-sync-secret)
+router.post("/verify", verifyPayment);
 
 export default router;

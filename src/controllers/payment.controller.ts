@@ -16,6 +16,24 @@ import { emailService } from "../services/email.service.js";
 import { controllerWrapper } from "../utils/ControllerWrapper.js";
 import { jsonResponse } from "../utils/response.js";
 import { AppError } from "../utils/AppError.js";
+import { logger } from "../utils/logger.js";
+import { timingSafeEqual } from "crypto";
+
+const FEETI_SYNC_SECRET = process.env.FEETI_SYNC_SECRET || "";
+
+function secretsMatch(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return timingSafeEqual(bufA, bufB);
+}
+
+function verifySyncSecret(req: Request): void {
+  const provided = req.headers["x-feeti-sync-secret"] as string;
+  if (!provided || !secretsMatch(provided, FEETI_SYNC_SECRET)) {
+    throw new AppError("Secret de synchronisation invalide", StatusCodes.FORBIDDEN);
+  }
+}
 
 // ─── Stripe : créer une intention de paiement ────────────────────────
 
@@ -156,8 +174,8 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
           margin: 2,
           color: { dark: "#111827", light: "#ffffff" },
         });
-      } catch {
-        // QR generation silently fails — ticket still created
+      } catch (qrErr) {
+        logger.error(`[payment] Génération QR échouée pour le billet ${ticket.id}:`, qrErr);
       }
       return { ...ticket, qrDataUrl };
     })
@@ -196,8 +214,8 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
             paymentProviderTransactionId: paymentId,
           });
           await transactionService.changerStatut(tx.id, "completed", actor, { reason: "Transaction finalisée" });
-        } catch {
-          // L'erreur de transaction ne bloque pas la livraison du billet
+        } catch (txErr) {
+          logger.error(`[payment] Échec de la transaction financière pour le billet ${ticket.id}:`, txErr);
         }
       })
     ).catch(() => {});
@@ -230,7 +248,7 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
   try {
     await addEmailJob({ type: "ticket-confirmation", to: holderEmail, data: emailData });
   } catch (queueErr) {
-    console.warn("[payment] Queue Redis indisponible, envoi direct SMTP:", (queueErr as Error).message);
+    logger.warn("[payment] Queue Redis indisponible, envoi direct SMTP:", (queueErr as Error).message);
     emailService.sendTicketConfirmation(holderEmail, emailData).catch((smtpErr) =>
       console.error("[payment] Échec envoi email confirmation billet:", (smtpErr as Error).message)
     );
@@ -246,6 +264,34 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
         deliveryFee: purchaseResult.deliveryFee,
         emailSent: true,
       },
+    })
+  );
+});
+
+// ─── Vérification seule (service-à-service) ──────────────────────────
+// Utilisée par FeetiPlay pour valider un paiement simulé (Stripe/Mobile
+// Money/Paystack) avant de créer son propre ticket streaming local, sans
+// dupliquer la logique de simulation (qui ne vit que dans ce service).
+
+export const verifyPayment = controllerWrapper(async (req: Request, res: Response) => {
+  verifySyncSecret(req);
+
+  const { provider, paymentId } = req.body as {
+    provider: "stripe" | "mobile_money" | "paystack";
+    paymentId: string;
+  };
+
+  if (!provider || !paymentId) {
+    throw new AppError("provider et paymentId requis", StatusCodes.BAD_REQUEST);
+  }
+
+  const valid = await paymentService.confirmPayment({ provider, paymentId });
+
+  res.status(StatusCodes.OK).json(
+    jsonResponse({
+      status: "success",
+      message: valid ? "Paiement valide" : "Paiement invalide",
+      data: { valid },
     })
   );
 });

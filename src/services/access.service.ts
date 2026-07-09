@@ -1,5 +1,5 @@
 import { StatusCodes } from "http-status-codes";
-import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID } from "crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from "crypto";
 import { AppError } from "../utils/AppError.js";
 import { accessRepository } from "../repositories/access.repository.js";
 import { eventRepository } from "../repositories/event.repository.js";
@@ -12,6 +12,12 @@ import { smsService } from "./sms.service.js";
 import { getIO } from "../config/socket.js";
 import type { ZoneAccessLevel } from "../generated/prisma/client.js";
 
+// En production, ces secrets ne doivent jamais retomber sur une valeur prévisible
+// codée en dur (chiffrement des badges / code agent falsifiables). Le fallback ne
+// s'applique qu'en dev/test.
+if ((!process.env.BADGE_SECRET || !process.env.FEETI_ACCESS_AGENT_CODE) && process.env.NODE_ENV === "production") {
+  throw new Error("BADGE_SECRET et FEETI_ACCESS_AGENT_CODE doivent être configurés en production");
+}
 const BADGE_SECRET = process.env.BADGE_SECRET || "feeti-access-badge-secret";
 const AGENT_CODE = process.env.FEETI_ACCESS_AGENT_CODE || "FEETI-AGENT";
 const FEETIPLAY_LIVE_ID_PREFIX = "feeti2_live_";
@@ -161,7 +167,10 @@ function buildBadgePayload(badge: {
 }
 
 function assertAgentCode(code?: string) {
-  if (code !== AGENT_CODE) {
+  const bufCode = Buffer.from(code ?? "");
+  const bufExpected = Buffer.from(AGENT_CODE);
+  const matches = bufCode.length === bufExpected.length && timingSafeEqual(bufCode, bufExpected);
+  if (!matches) {
     throw new AppError("Code agent invalide", StatusCodes.UNAUTHORIZED);
   }
 }

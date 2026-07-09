@@ -23,6 +23,8 @@ const mocks = vi.hoisted(() => ({
   deliveryZoneFindUnique: vi.fn(),
   deliveryAddressCreate: vi.fn(),
   eventServiceGetById: vi.fn(),
+  prismaTicketFindUnique: vi.fn().mockResolvedValue(null),
+  prismaTicketFindFirst: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("../repositories/event.repository.js", () => ({
@@ -54,6 +56,7 @@ vi.mock("../config/database.js", () => ({
   prisma: {
     deliveryZone: { findUnique: mocks.deliveryZoneFindUnique },
     deliveryAddress: { create: mocks.deliveryAddressCreate },
+    ticket: { findUnique: mocks.prismaTicketFindUnique, findFirst: mocks.prismaTicketFindFirst },
   },
 }));
 

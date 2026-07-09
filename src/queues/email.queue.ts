@@ -28,7 +28,6 @@ export type EmailJobData =
   | { type: "welcome-user";        to: string; userName: string }
   | { type: "welcome-organizer";   to: string; organizerName: string; contractHtml?: string; pandadocSigningUrl?: string }
   | { type: "ticket-confirmation"; to: string; data: TicketConfirmationData }
-  | { type: "password-reset";      to: string; userName: string; resetUrl: string }
   | { type: "password-changed";    to: string; userName: string }
   | { type: "event-reminder";      to: string; data: EventReminderData }
   | { type: "generic";             to: string; subject: string; html: string };

@@ -138,7 +138,7 @@ export const updateEventStatus = controllerWrapper(async (req: Request, res: Res
     },
   });
 
-  const dashboardUrl = `${process.env.FRONTEND_URL || "https://feeti.cg"}/organizer`;
+  const dashboardUrl = `${process.env.FRONT_URL || "https://feeti.cg"}/organizer`;
 
   const isFeetiPlayEvent = event.eventType === "STREAMING_LIVE" || event.eventType === "MIXTE";
 

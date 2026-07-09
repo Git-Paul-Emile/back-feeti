@@ -2,12 +2,13 @@ import bcrypt from "bcrypt";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../utils/AppError.js";
 import { authRepository } from "../repositories/auth.repository.js";
-import { generateToken, generateRefreshToken, generatePasswordResetToken, verifyPasswordResetToken } from "../config/jwt.js";
+import { generateToken, generateRefreshToken } from "../config/jwt.js";
 import { fbAuth, db, FieldValue } from "../config/firebase-admin.js";
 import { addEmailJob } from "../queues/email.queue.js";
 import { emailService } from "./email.service.js";
 import type { RegisterInput, LoginInput, UpdateProfileInput, ChangePasswordInput } from "../validators/auth.validator.js";
 import type { Role } from "../generated/prisma/client.js";
+import { logger } from "../utils/logger.js";
 
 function omitPassword<T extends { passwordHash?: string }>(user: T) {
   const { passwordHash: _, ...rest } = user;
@@ -24,7 +25,7 @@ async function enqueueWelcomeEmail(user: { role: Role; email: string; name: stri
   if (user.role === "organizer") {
     try {
       await addEmailJob({ type: "welcome-organizer", to: user.email, organizerName: user.name });
-      console.log(`[auth] job welcome-organizer en queue pour ${user.email}`);
+      logger.info(`[auth] job welcome-organizer en queue pour ${user.email}`);
     } catch (err) {
       console.error(`[auth] échec queue welcome-organizer, envoi direct pour ${user.email}:`, err);
       emailService.sendWelcomeOrganizer(user.email, { organizerName: user.name }).catch((e) =>
@@ -34,7 +35,7 @@ async function enqueueWelcomeEmail(user: { role: Role; email: string; name: stri
   } else {
     try {
       await addEmailJob({ type: "welcome-user", to: user.email, userName: user.name });
-      console.log(`[auth] job welcome-user en queue pour ${user.email}`);
+      logger.info(`[auth] job welcome-user en queue pour ${user.email}`);
     } catch (err) {
       console.error(`[auth] échec queue welcome-user, envoi direct pour ${user.email}:`, err);
       emailService.sendWelcomeUser(user.email, { userName: user.name }).catch((e) =>
@@ -105,7 +106,7 @@ export const authService = {
     const accessToken = generateToken({ userId: user.id, role: user.role });
     const refreshToken = generateRefreshToken({ userId: user.id });
 
-    console.log(`[auth] inscription OK — rôle: ${user.role}, email: ${user.email}`);
+    logger.info(`[auth] inscription OK — rôle: ${user.role}, email: ${user.email}`);
     await enqueueWelcomeEmail(user);
 
     return { user: omitPassword(user), accessToken, refreshToken };
@@ -241,7 +242,7 @@ export const authService = {
         city: (profileData as any).city || undefined,
       });
 
-      console.log(`[auth] inscription Firebase OK — rôle: ${user.role}, email: ${user.email}`);
+      logger.info(`[auth] inscription Firebase OK — rôle: ${user.role}, email: ${user.email}`);
       await enqueueWelcomeEmail(user);
     } else {
       const updates: {
@@ -279,7 +280,7 @@ export const authService = {
       }
 
       if (shouldSendWelcomeEmail) {
-        console.log(`[auth] rôle mis à jour vers organizer pour ${user.email}, préparation de l'email de bienvenue`);
+        logger.info(`[auth] rôle mis à jour vers organizer pour ${user.email}, préparation de l'email de bienvenue`);
         await enqueueWelcomeEmail(user);
       }
     }
@@ -349,32 +350,4 @@ export const authService = {
     }
   },
 
-  async forgotPassword(email: string) {
-    const user = await authRepository.findByEmail(email);
-    // Réponse identique que l'email existe ou non (sécurité anti-énumération)
-    if (!user) return;
-
-    const resetToken = generatePasswordResetToken(user.id);
-    const resetUrl = `${process.env.FRONTEND_URL || "https://front-feeti.vercel.app"}/reset-password?token=${resetToken}`;
-
-    await addEmailJob({ type: "password-reset", to: user.email, userName: user.name, resetUrl });
-  },
-
-  async resetPassword(token: string, newPassword: string) {
-    let payload: { userId: string };
-    try {
-      payload = verifyPasswordResetToken(token);
-    } catch {
-      throw new AppError("Lien de réinitialisation invalide ou expiré", StatusCodes.BAD_REQUEST);
-    }
-
-    const user = await authRepository.findById(payload.userId);
-    if (!user) throw new AppError("Utilisateur introuvable", StatusCodes.NOT_FOUND);
-
-    const saltRounds = parseInt(process.env.BCRYPT_SALT || "10");
-    const passwordHash = await bcrypt.hash(newPassword, saltRounds);
-    await authRepository.updateUser(user.id, { passwordHash });
-
-    addEmailJob({ type: "password-changed", to: user.email, userName: user.name }).catch(() => {});
-  },
 };

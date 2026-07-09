@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { createEvent, getMyEvents, getAllEvents, getEventById, deleteEvent, updateEvent, toggleFavorite, checkFavorite, getMyFavorites, toggleSalesBlocked } from "../controller/event.controller.js";
 import { authenticate, requireRole, optionalAuthenticate } from "../middlewares/authenticate.js";
+import { validateBody } from "../middlewares/validateBody.js";
+import { createEventSchema, updateEventSchema } from "../validators/event.validator.js";
 
 const router = Router();
 
@@ -17,8 +19,8 @@ router.post("/:id/favorite", authenticate, toggleFavorite);
 router.get("/:id", getEventById);
 
 // Organizer only
-router.post("/", authenticate, requireRole("organizer", "admin", "super_admin"), createEvent);
-router.put("/:id", authenticate, requireRole("organizer", "admin", "super_admin"), updateEvent);
+router.post("/", authenticate, requireRole("organizer", "admin", "super_admin"), validateBody(createEventSchema), createEvent);
+router.put("/:id", authenticate, requireRole("organizer", "admin", "super_admin"), validateBody(updateEventSchema), updateEvent);
 router.patch("/:id/toggle-sales-block", authenticate, requireRole("organizer", "admin", "super_admin"), toggleSalesBlocked);
 router.delete("/:id", authenticate, requireRole("organizer", "admin", "super_admin"), deleteEvent);
 

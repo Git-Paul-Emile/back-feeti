@@ -1,8 +1,11 @@
 import express from "express";
 import cookieParser from "cookie-parser";
 import cors from "cors";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../utils/AppError.js";
+import { logger } from "../utils/logger.js";
 import authRouter from "../routes/auth.routes.js";
 import eventRouter from "../routes/event.routes.js";
 import uploadRouter from "../routes/upload.routes.js";
@@ -59,14 +62,13 @@ const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allowed?: boolean) => void) => {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    // Prévisualisations Vercel (*.vercel.app)
-    if (origin.endsWith('.vercel.app')) return callback(null, true);
-    console.warn(`[CORS] Origine bloquée : ${origin}`);
+    logger.warn(`[CORS] Origine bloquée : ${origin}`);
     return callback(new Error('CORS policy: origin not allowed'), false);
   },
   credentials: true,
 };
 
+app.use(helmet());
 app.use(cors(corsOptions));
 
 // Parser JSON et cookies
@@ -74,12 +76,28 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(globalLimiter);
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Trop de tentatives, réessayez plus tard.' },
+});
+
 // Routes
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'OK', message: 'API opérationnelle' });
 });
 
-app.use('/api/auth', authRouter);
+app.use('/api/auth', authLimiter, authRouter);
 app.use('/api/events', eventRouter);
 app.use('/api/upload', uploadRouter);
 app.use('/api/tickets', ticketRouter);

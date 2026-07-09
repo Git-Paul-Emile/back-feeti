@@ -5,8 +5,8 @@ import * as fs from "fs";
 if (!admin.apps.length) {
   let serviceAccount: admin.ServiceAccount | null = null;
 
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT) as admin.ServiceAccount;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON) as admin.ServiceAccount;
   } else {
     const serviceAccountPath = path.resolve(process.cwd(), "firebase-service-account.json");
     if (fs.existsSync(serviceAccountPath)) {
@@ -28,6 +28,7 @@ if (!admin.apps.length) {
 export const db        = admin.firestore();
 export const fbAuth    = admin.auth();
 export const storage   = admin.storage();
+export const messaging = admin.messaging();
 export const FieldValue = admin.firestore.FieldValue;
 export const Timestamp  = admin.firestore.Timestamp;
 

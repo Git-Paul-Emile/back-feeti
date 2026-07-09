@@ -4,7 +4,7 @@ import { authService } from "../services/auth.service.js";
 import { jsonResponse } from "../utils/response.js";
 import { controllerWrapper } from "../utils/ControllerWrapper.js";
 import { verifyRefreshToken, generateToken } from "../config/jwt.js";
-import { updateProfileSchema, changePasswordSchema, forgotPasswordSchema, resetPasswordSchema } from "../validators/auth.validator.js";
+import { updateProfileSchema, changePasswordSchema } from "../validators/auth.validator.js";
 
 const REFRESH_COOKIE = "feeti_refresh";
 
@@ -110,36 +110,6 @@ export const refresh = controllerWrapper(async (req: Request, res: Response) => 
 
   res.status(StatusCodes.OK).json(
     jsonResponse({ status: "success", message: "Token rafraîchi", data: { accessToken } })
-  );
-});
-
-export const forgotPassword = controllerWrapper(async (req: Request, res: Response) => {
-  const result = forgotPasswordSchema.safeParse(req.body);
-  if (!result.success) {
-    res.status(StatusCodes.BAD_REQUEST).json({ message: "Email invalide", errors: { email: result.error.issues[0]?.message } });
-    return;
-  }
-  await authService.forgotPassword(result.data.email);
-  // Réponse identique que l'email existe ou non (anti-énumération)
-  res.status(StatusCodes.OK).json(
-    jsonResponse({ status: "success", message: "Si cet email existe, un lien de réinitialisation a été envoyé." })
-  );
-});
-
-export const resetPassword = controllerWrapper(async (req: Request, res: Response) => {
-  const result = resetPasswordSchema.safeParse(req.body);
-  if (!result.success) {
-    const errors: Record<string, string> = {};
-    result.error.issues.forEach((issue) => {
-      const field = issue.path[0] as string;
-      if (field && !errors[field]) errors[field] = issue.message;
-    });
-    res.status(StatusCodes.BAD_REQUEST).json({ message: "Données invalides", errors });
-    return;
-  }
-  await authService.resetPassword(result.data.token, result.data.newPassword);
-  res.status(StatusCodes.OK).json(
-    jsonResponse({ status: "success", message: "Mot de passe réinitialisé avec succès." })
   );
 });
 

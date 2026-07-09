@@ -119,6 +119,8 @@ const REGISTER_PAYLOAD = {
   name: "Mbeki Test",
   email: "mbeki@feeti.cm",
   password: "S3cr3t!2024",
+  country: "Cameroun",
+  city: "Douala",
 };
 
 const FAKE_USER = {

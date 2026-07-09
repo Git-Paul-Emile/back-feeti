@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { register, login, logout, me, refresh, updateProfile, changePassword, deleteAccount, registerWithFirebase, loginWithFirebase, verifyFirebaseToken, forgotPassword, resetPassword } from "../controller/auth.controller.js";
+import { register, login, logout, me, refresh, updateProfile, changePassword, deleteAccount, registerWithFirebase, loginWithFirebase, verifyFirebaseToken } from "../controller/auth.controller.js";
 import { validateBody } from "../middlewares/validateBody.js";
 import { authenticate } from "../middlewares/authenticate.js";
 import { registerSchema, loginSchema, firebaseRegisterSchema, firebaseLoginSchema } from "../validators/auth.validator.js";
@@ -7,10 +7,10 @@ import { registerSchema, loginSchema, firebaseRegisterSchema, firebaseLoginSchem
 const router = Router();
 
 // Routes existantes (bcrypt)
+// NOTE : le mot de passe oublié est géré uniquement par Firebase
+// (sendPasswordResetEmail côté front) — voir front/src/services/firebase-auth.ts.
 router.post("/register",        validateBody(registerSchema),  register);
 router.post("/login",           validateBody(loginSchema),     login);
-router.post("/forgot-password",                                forgotPassword);
-router.post("/reset-password",                                 resetPassword);
 
 // Routes Firebase Auth
 router.post("/firebase/register", validateBody(firebaseRegisterSchema), registerWithFirebase);

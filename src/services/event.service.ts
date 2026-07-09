@@ -6,6 +6,7 @@ import { eventRepository } from "../repositories/event.repository.js";
 import { ticketRepository } from "../repositories/ticket.repository.js";
 import { prisma } from "../config/database.js";
 import { feetiPlaySyncService } from "./feetiPlaySync.service.js";
+import { syncUpsertWithFallback, syncDeleteWithFallback } from "../queues/feetiPlaySync.queue.js";
 import { firestoreSyncService } from "./firestore-sync.service.js";
 import { db } from "../config/firebase-admin.js";
 
@@ -98,7 +99,7 @@ export const eventService = {
         where: { id: data.organizerId },
         select: { name: true },
       });
-      feetiPlaySyncService.upsertLiveEvent({
+      syncUpsertWithFallback({
         id: `${FEETIPLAY_LIVE_ID_PREFIX}${event.id}`,
         title: event.title,
         description: event.description,
@@ -116,9 +117,7 @@ export const eventService = {
         organizerId: event.organizerId,
         organizerName: organizer?.name ?? "Organisateur",
         location: event.location,
-      }).catch((err) => {
-        logger.error(`Erreur sync FeetiPlay pour event ${event.id}:`, err);
-      });
+      }, `createEvent ${event.id}`);
     }
 
     return event;
@@ -200,7 +199,7 @@ export const eventService = {
 
     // Pour STREAMING_LIVE et MIXTE : supprimer aussi le miroir FeetiPlay
     if (event.eventType === "STREAMING_LIVE" || event.eventType === "MIXTE") {
-      await feetiPlaySyncService.deleteLiveEvent(`${FEETIPLAY_LIVE_ID_PREFIX}${eventId}`).catch(() => {});
+      syncDeleteWithFallback(`${FEETIPLAY_LIVE_ID_PREFIX}${eventId}`, `deleteEvent ${eventId}`);
     }
 
     return deleted;
@@ -318,8 +317,10 @@ export const eventService = {
       const targetType = data.eventType ?? "STREAMING_LIVE";
 
       if (data.isLive === false || targetType === "PRESENTIEL") {
-        // Conversion vers PRESENTIEL : supprime FeetiPlay, crée record local pur
-        await feetiPlaySyncService.deleteLiveEvent(eventId);
+        // Conversion vers PRESENTIEL : supprime FeetiPlay, crée record local pur.
+        // Non bloquant (avec retry en file) : la conversion locale ne doit pas
+        // échouer si FeetiPlay est temporairement indisponible.
+        syncDeleteWithFallback(eventId, `updateEvent→PRESENTIEL ${eventId}`);
         return eventRepository.create({
           id: localId,
           title: data.title ?? event.title,

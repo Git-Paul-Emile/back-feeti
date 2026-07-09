@@ -15,8 +15,10 @@ export const liveEventConsentService = {
     eventType: LiveEventType;
   }): Promise<{ success: boolean; message: string }> {
     try {
-      // TODO: générer et envoyer les PDF réels par email
-      // Pour l'instant, on enregistre la demande et on simule l'envoi
+      // Génération PDF volontairement différée : le contenu légal des formulaires
+      // (clauses, mentions obligatoires) doit être rédigé et validé avec l'équipe
+      // juridique avant toute génération automatisée. En attendant, la demande est
+      // enregistrée et traitée manuellement (email sous 24h, cf. message ci-dessous).
       await prisma.liveEventConsentRequest.create({
         data: {
           organizerEmail: data.organizerEmail,

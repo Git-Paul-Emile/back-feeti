@@ -289,7 +289,7 @@ describe("scanBadge — validation des QR codes", () => {
   });
 
   it("retourne denied si le QR code est du JSON invalide", async () => {
-    const result = await accessService.scanBadge("ctrl-1", {
+    const result = await accessService.scanBadge("ctrl-1", "admin", {
       qrCode: "ceci-nest-pas-du-json-valide",
       zoneId: "zone-1",
     });
@@ -300,7 +300,7 @@ describe("scanBadge — validation des QR codes", () => {
   it("retourne denied si le JSON ne contient pas de badgeId/bid", async () => {
     const noIdQr = JSON.stringify({ v: 2, alg: "A256GCM", iv: "y", tag: "z", data: "d" });
 
-    const result = await accessService.scanBadge("ctrl-1", {
+    const result = await accessService.scanBadge("ctrl-1", "admin", {
       qrCode: noIdQr,
       zoneId: "zone-1",
     });
@@ -312,7 +312,7 @@ describe("scanBadge — validation des QR codes", () => {
     const qrWithBid = JSON.stringify({ v: 2, alg: "A256GCM", bid: "badge-unknown", iv: "aaa", tag: "bbb", data: "ccc" });
     mocks.findBadgeById.mockResolvedValue(null);
 
-    const result = await accessService.scanBadge("ctrl-1", {
+    const result = await accessService.scanBadge("ctrl-1", "admin", {
       qrCode: qrWithBid,
       zoneId: "zone-1",
     });
@@ -322,7 +322,7 @@ describe("scanBadge — validation des QR codes", () => {
   });
 
   it("accepte un scan sans code agent", async () => {
-    const result = await accessService.scanBadge("ctrl-1", {
+    const result = await accessService.scanBadge("ctrl-1", "admin", {
       qrCode: "{}",
       zoneId: "zone-1",
     });
@@ -545,7 +545,7 @@ describe("QR round-trip (chiffrement AES-256-GCM)", () => {
     mocks.createAccessLog.mockResolvedValue({});
 
     // Étape 2 : scanner le QR généré — il doit être reconnu (pas "QR code invalide")
-    const scanResult = await accessService.scanBadge("ctrl-1", {
+    const scanResult = await accessService.scanBadge("ctrl-1", "admin", {
       qrCode: badge.qrCode,
       zoneId: "zone-vip",
       agentCode: "FEETI-AGENT",

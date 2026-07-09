@@ -9,6 +9,12 @@ import { firestoreSyncService } from "./firestore-sync.service.js";
 import { randomUUID } from "crypto";
 import { createHmac } from "crypto";
 
+// En production, un secret non configuré ne doit jamais retomber sur une valeur
+// prévisible codée en dur (signature de billets falsifiable). Le fallback ne
+// s'applique qu'en dev/test.
+if (!process.env.TICKET_SECRET && process.env.NODE_ENV === "production") {
+  throw new Error("TICKET_SECRET doit être configuré en production");
+}
 const TICKET_SECRET = process.env.TICKET_SECRET || "feeti-ticket-secret-key";
 
 function generateQRData(ticketId: string, orderId: string, eventId: string): string {

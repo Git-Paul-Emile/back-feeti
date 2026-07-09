@@ -1,4 +1,5 @@
 import { PrismaClient } from "../generated/prisma/client.js";
+import { logger } from "../utils/logger.js";
 
 function getCollectionName(modelName: string): string {
   const camel = modelName.charAt(0).toLowerCase() + modelName.slice(1);
@@ -32,10 +33,10 @@ export const prisma = basePrisma.$extends({
       async upsert({ model, args, query }) {
         const result = await query(args);
         if (result && (result as any).id) {
-          console.log(`[Extension] Upsert capté pour ${model}, lancement synchro...`);
+          logger.info(`[Extension] Upsert capté pour ${model}, lancement synchro...`);
           import('../services/firestore-sync.service.js').then(({ firestoreSyncService }) => {
             firestoreSyncService.syncGeneric(getCollectionName(model), (result as any).id, result)
-              .then(() => console.log(`[Extension] Synchro OK pour ${model}/${(result as any).id}`))
+              .then(() => logger.info(`[Extension] Synchro OK pour ${model}/${(result as any).id}`))
               .catch(console.error);
           }).catch(err => console.error("[Extension] Erreur d'import :", err));
         }
@@ -57,7 +58,7 @@ export const prisma = basePrisma.$extends({
 export const connectToDatabase = async () => {
  try {
    await basePrisma.$connect();
-   console.log("✅ Connecté à la base de données principale (avec Firestore Auto-Sync)");
+   logger.info("✅ Connecté à la base de données principale (avec Firestore Auto-Sync)");
  } catch (err) {
    console.error("❌ Impossible de se connecter à la base de données", err);
    throw err;

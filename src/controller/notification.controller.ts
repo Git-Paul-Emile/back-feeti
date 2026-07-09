@@ -5,6 +5,8 @@ import { addEmailJob } from "../queues/email.queue.js";
 import { AppError } from "../utils/AppError.js";
 import { jsonResponse } from "../utils/response.js";
 import { controllerWrapper } from "../utils/ControllerWrapper.js";
+import { messaging } from "../config/firebase-admin.js";
+import { logger } from "../utils/logger.js";
 
 // ── Email ────────────────────────────────────────────────────────────────────
 
@@ -170,14 +172,19 @@ export const sendPushNotification = controllerWrapper(async (req: Request, res: 
     throw new AppError("Champs requis : token, title, body", StatusCodes.BAD_REQUEST);
   }
 
-  // TODO: Implémenter l'envoi via Firebase Cloud Messaging
-  res.status(StatusCodes.OK).json(
-    jsonResponse({
-      status: "success",
-      message: "Notification push simulée (intégration FCM à venir)",
-      data: { token, title, body },
-    })
-  );
+  try {
+    const messageId = await messaging.send({
+      token,
+      notification: { title, body, ...(imageUrl && { imageUrl }) },
+      ...(data && { data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) }),
+    });
+    res.status(StatusCodes.OK).json(
+      jsonResponse({ status: "success", message: "Notification push envoyée", data: { messageId } })
+    );
+  } catch (err) {
+    logger.error("[FCM] Échec envoi notification push:", err);
+    throw new AppError("Échec de l'envoi de la notification push", StatusCodes.BAD_GATEWAY);
+  }
 });
 
 export const sendPushMultiple = controllerWrapper(async (req: Request, res: Response) => {
@@ -192,11 +199,17 @@ export const sendPushMultiple = controllerWrapper(async (req: Request, res: Resp
     throw new AppError("Champs requis : tokens[], title, body", StatusCodes.BAD_REQUEST);
   }
 
+  const result = await messaging.sendEachForMulticast({
+    tokens,
+    notification: { title, body },
+    ...(data && { data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) }),
+  });
+
   res.status(StatusCodes.OK).json(
     jsonResponse({
       status: "success",
-      message: "Notifications multiples simulées (intégration FCM à venir)",
-      data: { success_count: tokens.length, failure_count: 0 },
+      message: "Notifications envoyées",
+      data: { success_count: result.successCount, failure_count: result.failureCount },
     })
   );
 });
@@ -208,8 +221,10 @@ export const subscribeToTopic = controllerWrapper(async (req: Request, res: Resp
     throw new AppError("Champs requis : token, topic", StatusCodes.BAD_REQUEST);
   }
 
+  await messaging.subscribeToTopic([token], topic);
+
   res.status(StatusCodes.OK).json(
-    jsonResponse({ status: "success", message: `Abonné au topic "${topic}" (simulé)` })
+    jsonResponse({ status: "success", message: `Abonné au topic "${topic}"` })
   );
 });
 
@@ -220,8 +235,10 @@ export const unsubscribeFromTopic = controllerWrapper(async (req: Request, res: 
     throw new AppError("Champs requis : token, topic", StatusCodes.BAD_REQUEST);
   }
 
+  await messaging.unsubscribeFromTopic([token], topic);
+
   res.status(StatusCodes.OK).json(
-    jsonResponse({ status: "success", message: `Désabonné du topic "${topic}" (simulé)` })
+    jsonResponse({ status: "success", message: `Désabonné du topic "${topic}"` })
   );
 });
 
@@ -237,10 +254,17 @@ export const sendToTopic = controllerWrapper(async (req: Request, res: Response)
     throw new AppError("Champs requis : topic, title, body", StatusCodes.BAD_REQUEST);
   }
 
+  const messageId = await messaging.send({
+    topic,
+    notification: { title, body },
+    ...(data && { data: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) }),
+  });
+
   res.status(StatusCodes.OK).json(
     jsonResponse({
       status: "success",
-      message: `Notification envoyée au topic "${topic}" (simulée)`,
+      message: `Notification envoyée au topic "${topic}"`,
+      data: { messageId },
     })
   );
 });

@@ -26,7 +26,7 @@ export interface SyncedLiveEvent {
   updatedAt?: string;
 }
 
-interface SyncPayload {
+export interface SyncPayload {
   id: string;
   title: string;
   description: string;

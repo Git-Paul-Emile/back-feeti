@@ -1,4 +1,5 @@
 import { SessionsClient } from "@google-cloud/dialogflow";
+import { logger } from "../utils/logger.js";
 
 type ChatbotResult = { reply: string; intent: string | null; confidence: number };
 
@@ -70,7 +71,7 @@ function getClient(config: { clientEmail: string; privateKey: string }): Session
 export async function detectIntent(message: string, sessionId: string): Promise<ChatbotResult> {
   const config = getDialogflowConfig();
   if (!config) {
-    console.warn("[chatbot] Dialogflow non configure, utilisation du fallback local");
+    logger.warn("[chatbot] Dialogflow non configure, utilisation du fallback local");
     return getFallbackIntent(message);
   }
 

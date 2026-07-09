@@ -40,13 +40,3 @@ export const generateRefreshToken = (payload: object): string => {
 export const verifyRefreshToken = (token: string) => {
   return jwt.verify(token, getRefreshTokenSecret());
 };
-
-export const generatePasswordResetToken = (userId: string): string => {
-  return jwt.sign({ userId, purpose: "password-reset" }, getAccessTokenSecret(), { expiresIn: "1h" });
-};
-
-export const verifyPasswordResetToken = (token: string): { userId: string; purpose: string } => {
-  const payload = jwt.verify(token, getAccessTokenSecret()) as { userId: string; purpose: string };
-  if (payload.purpose !== "password-reset") throw new Error("Token invalide");
-  return payload;
-};

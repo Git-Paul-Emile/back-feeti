@@ -118,7 +118,7 @@ export function templateTicketConfirmation(data: {
   totalAmount: number;
   currency: string;
 }): string {
-  const FRONTEND_URL = process.env.FRONTEND_URL || "https://front-feeti.vercel.app";
+  const FRONTEND_URL = process.env.FRONT_URL || "https://front-feeti.vercel.app";
   const API_URL = process.env.API_URL || "https://back-feeti.onrender.com";
 
   const ticketRows = data.tickets
@@ -183,23 +183,6 @@ export function templateTicketConfirmation(data: {
         Total payé : <span style="color:#4338ca;">${data.totalAmount.toLocaleString("fr-FR")} ${data.currency}</span>
       </p>
     </div>
-  `);
-}
-
-export function templatePasswordReset(data: { userName: string; resetUrl: string }): string {
-  return baseLayout(`
-    <h2 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#111827;">Réinitialisation du mot de passe</h2>
-    <p style="color:#6b7280;font-size:16px;margin-bottom:28px;">Bonjour ${data.userName},</p>
-    <p style="color:#374151;font-size:15px;line-height:1.6;margin-bottom:28px;">
-      Vous avez demandé à réinitialiser votre mot de passe. Cliquez sur le bouton ci-dessous pour créer un nouveau mot de passe.
-      Ce lien est valable pendant <strong>1 heure</strong>.
-    </p>
-    <div style="text-align:center;margin-bottom:28px;">
-      <a href="${data.resetUrl}" style="display:inline-block;background:linear-gradient(135deg,#4338ca,#7c3aed);color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;font-weight:600;">
-        Réinitialiser mon mot de passe
-      </a>
-    </div>
-    <p style="color:#9ca3af;font-size:13px;">Si vous n'avez pas demandé cette réinitialisation, ignorez cet email. Votre mot de passe ne sera pas modifié.</p>
   `);
 }
 
@@ -443,15 +426,6 @@ class EmailService {
       subject: `✅ Vos billets pour « ${data.eventTitle} » — Commande #${data.orderId.slice(0, 8).toUpperCase()}`,
       html: templateTicketConfirmation(data),
       text: `Bonjour ${data.holderName}, vos billets pour ${data.eventTitle} sont confirmés. Commande: ${data.orderId}`,
-    });
-  }
-
-  async sendPasswordReset(to: string, data: Parameters<typeof templatePasswordReset>[0]): Promise<void> {
-    await this.provider.send({
-      to,
-      subject: "Réinitialisation de votre mot de passe Féeti",
-      html: templatePasswordReset(data),
-      text: `Lien de réinitialisation : ${data.resetUrl}`,
     });
   }
 

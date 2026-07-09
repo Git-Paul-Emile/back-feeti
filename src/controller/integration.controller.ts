@@ -103,29 +103,36 @@ export const syncFavoriteFromFeetiPlay = controllerWrapper(async (req: Request, 
     where: { OR: [{ id: userId }, { firebaseUid: userId }] },
   });
 
+  // UserFavorite.userId a une contrainte FK obligatoire vers User.id : impossible
+  // de stocker le favori tant que l'utilisateur n'a pas de copie locale.
   if (!user) {
-    // On stocke le favori avec l'ID tel quel - il pourra être résolu plus tard
-    logger.warn(`[sync] Utilisateur ${userId} introuvable pour le favori - stocké avec firebaseUid`);
+    logger.warn(`[sync] Utilisateur ${userId} introuvable localement - favori ignoré`);
+    res.status(StatusCodes.OK).json(
+      jsonResponse({ status: "success", message: "Utilisateur non synchronisé localement, favori ignoré", data: { synced: false } })
+    );
+    return;
   }
 
-  const effectiveUserId = user?.id ?? userId;
-
-  // Vérifier si l'événement existe localement (optionnel - on accepte les favoris de n'importe quel eventId)
+  // UserFavorite.eventId a aussi une contrainte FK obligatoire vers Event.id.
   const event = await prisma.event.findUnique({
     where: { id: localEventId },
   });
 
   if (!event) {
-    logger.warn(`[sync] Événement ${localEventId} introuvable localement - favori stocké quand même`);
+    logger.warn(`[sync] Événement ${localEventId} introuvable localement - favori ignoré`);
+    res.status(StatusCodes.OK).json(
+      jsonResponse({ status: "success", message: "Événement non synchronisé localement, favori ignoré", data: { synced: false } })
+    );
+    return;
   }
 
   const existing = await prisma.userFavorite.findUnique({
-    where: { userId_eventId: { userId: effectiveUserId, eventId: localEventId } },
+    where: { userId_eventId: { userId: user.id, eventId: localEventId } },
   });
 
   if (!existing) {
     await prisma.userFavorite.create({
-      data: { userId: effectiveUserId, eventId: localEventId },
+      data: { userId: user.id, eventId: localEventId },
     });
   }
 
@@ -224,5 +231,56 @@ export const syncTicketFromFeetiPlay = controllerWrapper(async (req: Request, re
   logger.info(`[sync] Billet synchronisé: ticket=${ticket.id}, event=${eventId}, user=${user.id}`);
   res.status(StatusCodes.OK).json(
     jsonResponse({ status: "success", message: "Billet synchronisé", data: { synced: true } })
+  );
+});
+
+/**
+ * POST /api/integration/feetiplay/event-status
+ * Appelé par FeetiPlay quand le statut réel du direct change (webhook Mux :
+ * video.live_stream.active/idle/disabled, video.asset.ready) pour un événement
+ * STREAMING_LIVE/MIXTE dont l'origine est feeti2. Sans cet appel, la copie
+ * locale feeti2 ne reflète jamais l'état réel du stream (isLive figé depuis
+ * la création/dernière modification côté feeti2).
+ */
+export const syncEventStatusFromFeetiPlay = controllerWrapper(async (req: Request, res: Response) => {
+  verifySyncSecret(req);
+
+  const { eventId, isLive, streamUrl, videoUrl } = req.body as {
+    eventId: string;
+    isLive: boolean;
+    streamUrl?: string | null;
+    videoUrl?: string | null;
+  };
+
+  if (!eventId || typeof isLive !== "boolean") {
+    throw new AppError("eventId et isLive requis", StatusCodes.BAD_REQUEST);
+  }
+
+  const FEETIPLAY_LIVE_ID_PREFIX = "feeti2_live_";
+  const localEventId = eventId.startsWith(FEETIPLAY_LIVE_ID_PREFIX)
+    ? eventId.replace(FEETIPLAY_LIVE_ID_PREFIX, "")
+    : eventId;
+
+  const event = await prisma.event.findUnique({ where: { id: localEventId } });
+  if (!event) {
+    // L'événement n'a pas (ou plus) de copie locale feeti2 — rien à mettre à jour.
+    res.status(StatusCodes.OK).json(
+      jsonResponse({ status: "success", message: "Aucune copie locale à synchroniser", data: { synced: false } })
+    );
+    return;
+  }
+
+  await prisma.event.update({
+    where: { id: localEventId },
+    data: {
+      isLive,
+      ...(streamUrl !== undefined && { streamUrl }),
+      ...(videoUrl !== undefined && { videoUrl }),
+    },
+  });
+
+  logger.info(`[sync] Statut live synchronisé depuis FeetiPlay: event=${localEventId}, isLive=${isLive}`);
+  res.status(StatusCodes.OK).json(
+    jsonResponse({ status: "success", message: "Statut synchronisé", data: { synced: true } })
   );
 });

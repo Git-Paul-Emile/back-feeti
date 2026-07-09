@@ -1,3 +1,5 @@
+import { logger } from "../utils/logger.js";
+
 export interface SmsResult {
   provider: "webhook" | "simulation";
   delivered: boolean;
@@ -7,7 +9,7 @@ class SmsService {
   async send(to: string, message: string): Promise<SmsResult> {
     const webhookUrl = process.env.SMS_WEBHOOK_URL;
     if (!webhookUrl) {
-      console.log(`[SMS simulation] ${to}: ${message}`);
+      logger.info(`[SMS simulation] ${to}: ${message}`);
       return { provider: "simulation", delivered: true };
     }
 
