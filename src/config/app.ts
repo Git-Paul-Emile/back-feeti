@@ -33,6 +33,7 @@ import promotionRouter from "../routes/promotion.routes.js";
 import establishmentRouter from "../routes/establishment.routes.js";
 import notificationRouter from "../routes/notification.routes.js";
 import creatorRouter from "../routes/creator.routes.js";
+import newsletterRouter from "../routes/newsletter.routes.js";
 
 const app = express();
 
@@ -135,6 +136,8 @@ app.use('/api/notifications', notificationRouter);
 app.use('/api/creators', creatorRouter);
 // ─── Espace propriétaires d'établissement ────────────────────────────────────
 app.use('/api/establishment', establishmentRouter);
+// ─── Newsletter (inscription footer + désinscription) ────────────────────────
+app.use('/api/newsletter', newsletterRouter);
 
 // Middleware pour routes non trouvées
 app.use((_req, res) => {
@@ -154,6 +157,10 @@ app.use((err: Error | AppError, _req: express.Request, res: express.Response, _n
         });
       case 'P2025':
         return res.status(StatusCodes.NOT_FOUND).json({ message: 'Ressource non trouvée' });
+      case 'P2003':
+        return res.status(StatusCodes.BAD_REQUEST).json({
+          message: 'Suppression impossible : cet élément est encore référencé ailleurs (ex: des échanges ou historiques liés existent). Désactivez-le plutôt que de le supprimer.'
+        });
       default:
         return res.status(StatusCodes.INTERNAL_SERVER_ERROR).json({ message: 'Erreur de base de données inconnue' });
     }

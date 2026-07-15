@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { emailService } from "../services/email.service.js";
+import { weeklyDigestService } from "../services/weeklyDigest.service.js";
+import { newsletterRepository } from "../repositories/newsletter.repository.js";
 import { addEmailJob } from "../queues/email.queue.js";
 import { AppError } from "../utils/AppError.js";
 import { jsonResponse } from "../utils/response.js";
@@ -129,6 +131,34 @@ export const sendEventReminderEmail = controllerWrapper(async (req: Request, res
 
   res.status(StatusCodes.OK).json(
     jsonResponse({ status: "success", message: "Rappel email programmé" })
+  );
+});
+
+// Newsletter "Les Fééties de la semaine" :
+//  - avec { testEmail } : envoi immédiat et synchrone à une seule adresse (test/QA)
+//  - sans testEmail : déclenche la campagne complète pour toute l'audience (async, via la queue)
+export const sendWeeklyDigestEmail = controllerWrapper(async (req: Request, res: Response) => {
+  const { testEmail } = req.body as { testEmail?: string };
+
+  if (testEmail) {
+    const [subscriber, content] = await Promise.all([
+      newsletterRepository.subscribe(testEmail, "test"),
+      weeklyDigestService.buildContent(),
+    ]);
+    const apiUrl = (process.env.API_URL || "https://back-feeti.onrender.com").replace(/\/$/, "");
+    await emailService.sendWeeklyDigest(testEmail, {
+      content,
+      unsubscribeUrl: `${apiUrl}/api/newsletter/unsubscribe/${subscriber.unsubscribeToken}`,
+    });
+    res.status(StatusCodes.OK).json(
+      jsonResponse({ status: "success", message: `Email de test envoyé à ${testEmail}`, data: { to: testEmail } })
+    );
+    return;
+  }
+
+  await addEmailJob({ type: "weekly-digest-campaign" });
+  res.status(StatusCodes.OK).json(
+    jsonResponse({ status: "success", message: "Campagne newsletter hebdomadaire déclenchée" })
   );
 });
 

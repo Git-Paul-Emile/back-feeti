@@ -162,6 +162,22 @@ model LiveEventConsentRequest {
   updatedAt      DateTime  @updatedAt
 }
 
+// ─── Newsletter ─────────────────────────────────────────────────────────
+// Inscrits au formulaire du footer (visiteurs sans compte inclus).
+// Utilisé pour la newsletter hebdomadaire "Les Fééties de la semaine".
+model NewsletterSubscriber {
+  id               String    @id @default(cuid())
+  email            String    @unique
+  isActive         Boolean   @default(true)
+  unsubscribeToken String    @unique @default(cuid())
+  source           String    @default("footer") // footer | signup | checkout | import
+  subscribedAt     DateTime  @default(now())
+  unsubscribedAt   DateTime?
+  updatedAt        DateTime  @updatedAt
+
+  @@index([isActive])
+}
+
 model Category {
   id        String   @id @default(cuid())
   name      String   @unique

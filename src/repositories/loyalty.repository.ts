@@ -12,6 +12,7 @@ export const loyaltyRepository = {
       include: {
         user: { select: { id: true, name: true, email: true } },
         missionProgress: { include: { mission: true } },
+        _count: { select: { referrals: true } },
       },
     });
     if (!profile) {
@@ -21,6 +22,7 @@ export const loyaltyRepository = {
         include: {
           user: { select: { id: true, name: true, email: true } },
           missionProgress: { include: { mission: true } },
+          _count: { select: { referrals: true } },
         },
       });
     }

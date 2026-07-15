@@ -4,6 +4,7 @@ import {
   sendEmail,
   sendTicketConfirmationEmail,
   sendEventReminderEmail,
+  sendWeeklyDigestEmail,
   sendSMS,
   sendTicketConfirmationSMS,
   sendPushNotification,
@@ -23,6 +24,11 @@ router.post("/email/ticket-confirmation", authenticate, sendTicketConfirmationEm
 
 // Rappel événement (appelé par le scheduler/cron)
 router.post("/email/event-reminder", authenticate, requireRole("admin", "super_admin"), sendEventReminderEmail);
+
+// Newsletter hebdomadaire "Les Fééties de la semaine" :
+//  - { testEmail } → envoi de test immédiat à une seule adresse
+//  - sans testEmail → déclenche la campagne complète (envoyée aussi automatiquement chaque lundi 8h)
+router.post("/email/weekly-digest", authenticate, requireRole("admin", "super_admin"), sendWeeklyDigestEmail);
 
 // SMS (simulé — intégration Twilio)
 router.post("/sms/send", authenticate, requireRole("admin", "super_admin"), sendSMS);

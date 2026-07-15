@@ -2,12 +2,14 @@ import { Worker, type Job } from "bullmq";
 import { redisForWorker } from "../config/redis.js";
 import { emailService } from "../services/email.service.js";
 import { pandadocService } from "../services/pandadoc.service.js";
-import type { EmailJobData } from "./email.queue.js";
+import { weeklyDigestService } from "../services/weeklyDigest.service.js";
+import { addEmailJob, type EmailJobData } from "./email.queue.js";
 import { logger } from "../utils/logger.js";
 
 async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
   const d = job.data;
-  logger.info(`[email-queue] processing job ${job.id} (${d.type} → ${d.to})`);
+  const target = "to" in d ? d.to : "(campagne)";
+  logger.info(`[email-queue] processing job ${job.id} (${d.type} → ${target})`);
 
   switch (d.type) {
     case "welcome-user":
@@ -49,6 +51,28 @@ async function processEmailJob(job: Job<EmailJobData>): Promise<void> {
     case "generic":
       await emailService.send(d.to, d.subject, d.html);
       break;
+
+    case "weekly-digest":
+      await emailService.sendWeeklyDigest(d.to, { content: d.content, unsubscribeUrl: d.unsubscribeUrl });
+      break;
+
+    case "weekly-digest-campaign": {
+      const apiUrl = (process.env.API_URL || "https://back-feeti.onrender.com").replace(/\/$/, "");
+      const [recipients, content] = await Promise.all([
+        weeklyDigestService.resolveAudience(),
+        weeklyDigestService.buildContent(),
+      ]);
+      logger.info(`[weekly-digest] campagne : ${recipients.length} destinataire(s)`);
+      for (const r of recipients) {
+        await addEmailJob({
+          type: "weekly-digest",
+          to: r.email,
+          content,
+          unsubscribeUrl: `${apiUrl}/api/newsletter/unsubscribe/${r.unsubscribeToken}`,
+        });
+      }
+      break;
+    }
   }
 }
 
@@ -59,7 +83,8 @@ export function startEmailWorker(): Worker<EmailJobData> {
   });
 
   worker.on("completed", (job) => {
-    logger.info(`[email-queue] ✓ job ${job.id} (${job.data.type} → ${job.data.to})`);
+    const target = "to" in job.data ? job.data.to : "(campagne)";
+    logger.info(`[email-queue] ✓ job ${job.id} (${job.data.type} → ${target})`);
   });
 
   worker.on("failed", (job, err) => {

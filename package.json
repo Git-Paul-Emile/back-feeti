@@ -12,6 +12,7 @@
     "build": "npx prisma generate && tsc && cp -r src/assets dist/",
     "start": "node dist/index.js",
     "test:smtp": "tsx scripts/test-smtp.ts",
+    "test:weekly-digest": "tsx scripts/test-weekly-digest.ts",
     "generate": "npx prisma generate",
     "migrate": "npx prisma migrate dev",
     "seed": "tsx prisma/seed.ts"
@@ -62,6 +63,7 @@
     "nodemailer": "^8.0.5",
     "pdfkit": "^0.18.0",
     "qrcode": "^1.5.4",
+    "resend": "^6.17.2",
     "socket.io": "^4.8.3",
     "zod": "^4.3.6"
   }

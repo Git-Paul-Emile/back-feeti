@@ -5,6 +5,7 @@ import app, { allowedOrigins } from "./config/app.js";
 import { initSocket } from "./config/socket.js";
 import { startEmailWorker } from "./queues/email.worker.js";
 import { startFeetiPlaySyncWorker } from "./queues/feetiPlaySync.worker.js";
+import { scheduleWeeklyDigestCampaign } from "./queues/email.queue.js";
 import { logger } from "./utils/logger.js";
 
 const REQUIRED_ENV_VARS = ["DATABASE_URL", "ACCESS_TOKEN_SECRET", "REFRESH_TOKEN_SECRET"];
@@ -22,6 +23,7 @@ const initializeApp = async () => {
     await connectToDatabase();
     startEmailWorker();
     startFeetiPlaySyncWorker();
+    await scheduleWeeklyDigestCampaign();
 
     const configuredPort = Number(process.env.PORT || DEFAULT_BACKEND_PORT);
     const port = Number.isInteger(configuredPort) && configuredPort > 0

@@ -787,7 +787,7 @@ function formatProfile(profile: any) {
     eventsAttended: profile.eventsAttended,
     totalSpent: profile.totalSpent,
     referralCode: profile.referralCode,
-    referrals: profile.referrals?.length ?? 0,
+    referrals: profile._count?.referrals ?? 0,
     createdAt: profile.createdAt,
   };
 }
