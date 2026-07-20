@@ -4,6 +4,7 @@
  */
 import type { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
+import { Prisma } from "../generated/prisma/client.js";
 import { prisma } from "../config/database.js";
 import { AppError } from "../utils/AppError.js";
 import { jsonResponse } from "../utils/response.js";
@@ -225,44 +226,14 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
     throw new AppError("Cet événement a déjà un pack actif", StatusCodes.CONFLICT);
   }
 
-  // Vérifier les slots
-  const now = new Date();
-  const limit = SLOT_LIMITS[packType];
-  const activeCount = await prisma.event.count({
-    where: {
-      id: { not: localEventId },
-      promotionType: packType,
-      promotionStatus: "active",
-      OR: [{ promotionEndDate: null }, { promotionEndDate: { gte: now } }],
-    },
-  });
-
-  if (activeCount >= limit) {
-    const earliest = await prisma.event.findFirst({
-      where: {
-        promotionType: packType,
-        promotionStatus: "active",
-        promotionEndDate: { gte: now },
-      },
-      orderBy: { promotionEndDate: "asc" },
-      select: { promotionEndDate: true },
-    });
-    const daysUntil = earliest?.promotionEndDate
-      ? Math.ceil((earliest.promotionEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-      : null;
-
-    throw new AppError(
-      `Slots Pack ${packType} complets. Prochain disponible dans ${daysUntil ?? '?'} jour(s).`,
-      StatusCodes.CONFLICT
-    );
-  }
-
   // Récupérer la config du pack
   await ensurePackConfigs();
   const cfg = await prisma.promotionPackConfig.findUnique({ where: { type: packType } });
   if (!cfg) throw new AppError("Configuration du pack introuvable", StatusCodes.INTERNAL_SERVER_ERROR);
 
   // Calculer les dates
+  const now = new Date();
+  const limit = SLOT_LIMITS[packType];
   const startDate = now;
   const endDate = new Date(now);
   endDate.setDate(endDate.getDate() + cfg.durationDays);
@@ -271,36 +242,88 @@ export const purchaseEventPromotion = controllerWrapper(async (req: Request, res
   const purchaseStatus = paymentMode === "on_sales" ? "pending_payment" : "completed";
   const paymentStatus  = paymentMode === "on_sales" ? "pending"          : "completed";
 
-  // Transaction ACID : créer le PromotionPurchase + activer l'Event
-  const [purchase] = await prisma.$transaction([
-    prisma.promotionPurchase.create({
-      data: {
-        eventId: localEventId,
-        organizerId,
-        packType,
-        pricePaid: cfg.price,
-        currency: cfg.currency,
-        status: purchaseStatus,
-        paymentMode,
-        paymentStatus,
-        paymentProvider: paymentProvider ?? null,
-        paymentSimulated,
-        paymentRef: paymentRef ?? null,
-        promotionStartDate: startDate,
-        promotionEndDate: endDate,
-      },
-    }),
-    // Dans les deux cas l'événement est mis en avant immédiatement
-    prisma.event.update({
-      where: { id: localEventId },
-      data: {
-        promotionType: packType,
-        promotionStatus: "active",
-        promotionStartDate: startDate,
-        promotionEndDate: endDate,
-      },
-    }),
-  ]);
+  // Revérifier les slots et créer le PromotionPurchase + activer l'Event de
+  // façon atomique (isolation Serializable + retry sur conflit) : sans ça,
+  // deux achats concurrents sur les mêmes slots peuvent tous les deux passer
+  // le contrôle de quota.
+  const MAX_ATTEMPTS = 3;
+  let purchase;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      purchase = await prisma.$transaction(
+        async (tx) => {
+          const activeCount = await tx.event.count({
+            where: {
+              id: { not: localEventId },
+              promotionType: packType,
+              promotionStatus: "active",
+              OR: [{ promotionEndDate: null }, { promotionEndDate: { gte: now } }],
+            },
+          });
+
+          if (activeCount >= limit) {
+            const earliest = await tx.event.findFirst({
+              where: {
+                promotionType: packType,
+                promotionStatus: "active",
+                promotionEndDate: { gte: now },
+              },
+              orderBy: { promotionEndDate: "asc" },
+              select: { promotionEndDate: true },
+            });
+            const daysUntil = earliest?.promotionEndDate
+              ? Math.ceil((earliest.promotionEndDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+              : null;
+
+            throw new AppError(
+              `Slots Pack ${packType} complets. Prochain disponible dans ${daysUntil ?? '?'} jour(s).`,
+              StatusCodes.CONFLICT
+            );
+          }
+
+          const created = await tx.promotionPurchase.create({
+            data: {
+              eventId: localEventId,
+              organizerId,
+              packType,
+              pricePaid: cfg.price,
+              currency: cfg.currency,
+              status: purchaseStatus,
+              paymentMode,
+              paymentStatus,
+              paymentProvider: paymentProvider ?? null,
+              paymentSimulated,
+              paymentRef: paymentRef ?? null,
+              promotionStartDate: startDate,
+              promotionEndDate: endDate,
+            },
+          });
+
+          // Dans les deux cas l'événement est mis en avant immédiatement
+          await tx.event.update({
+            where: { id: localEventId },
+            data: {
+              promotionType: packType,
+              promotionStatus: "active",
+              promotionStartDate: startDate,
+              promotionEndDate: endDate,
+            },
+          });
+
+          return created;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable }
+      );
+      break;
+    } catch (err) {
+      const isSerializationConflict =
+        err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2034";
+      if (isSerializationConflict && attempt < MAX_ATTEMPTS) continue;
+      throw err;
+    }
+  }
+
+  if (!purchase) throw new AppError("Échec de l'achat de la promotion", StatusCodes.INTERNAL_SERVER_ERROR);
 
   const modeLabel = paymentMode === "on_sales"
     ? "Pack activé — coût déduit automatiquement sur les ventes de billets"

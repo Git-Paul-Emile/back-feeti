@@ -90,59 +90,79 @@ export const ticketService = {
     }
 
     const orderId = randomUUID();
-    const tickets = [];
 
-    for (const item of data.items) {
-      for (let i = 0; i < item.quantity; i++) {
-        const ticketId = randomUUID();
-        const qrData = generateQRData(ticketId, orderId, data.eventId);
-        const ticket = await ticketRepository.create({
-          eventId: data.eventId,
-          userId: data.userId,
-          category: item.category,
-          price: item.price,
-          currency: event.currency,
-          holderName: data.holderName,
-          holderEmail: data.holderEmail,
-          qrData,
-          orderId,
-          deliveryMethod: data.delivery?.method === "physical" ? "physical" : "email",
-          deliveryStatus: data.delivery?.method === "physical" ? "pending" : undefined,
-        });
+    // Toute la création (billets + adresse de livraison) et la mise à jour de
+    // la jauge sont atomiques : soit tout est écrit, soit rien ne l'est. La
+    // mise à jour de `attendees` revérifie elle-même la jauge de façon
+    // atomique (UPDATE conditionnel) pour empêcher la survente en cas
+    // d'achats concurrents proches de `maxAttendees`.
+    const tickets = await prisma.$transaction(async (tx) => {
+      const createdTickets = [];
 
-        // Sync ticket vers Firestore (fire-and-forget)
-        firestoreSyncService.syncTicket({
-          id: ticket.id,
-          eventId: ticket.eventId,
-          userId: ticket.userId,
-          type: ticket.category,
-          status: ticket.status,
-          qrCode: ticket.qrData,
-          usedAt: ticket.usedAt,
-          createdAt: ticket.createdAt,
-          updatedAt: ticket.updatedAt,
-        }).catch(() => {});
-
-        // Créer l'adresse de livraison pour le premier billet seulement
-        if (data.delivery?.method === "physical" && i === 0 && item === data.items[0]) {
-          await prisma.deliveryAddress.create({
+      for (const item of data.items) {
+        for (let i = 0; i < item.quantity; i++) {
+          const ticketId = randomUUID();
+          const qrData = generateQRData(ticketId, orderId, data.eventId);
+          const ticket = await tx.ticket.create({
             data: {
-              ticketId: ticket.id,
-              recipientName: data.delivery.recipientName!,
-              recipientPhone: data.delivery.recipientPhone!,
-              zoneId: data.delivery.zoneId!,
-              additionalInfo: data.delivery.additionalInfo,
-              deliveryFee,
+              eventId: data.eventId,
+              userId: data.userId,
+              category: item.category,
+              price: item.price,
+              currency: event.currency,
+              holderName: data.holderName,
+              holderEmail: data.holderEmail,
+              qrData,
+              orderId,
+              deliveryMethod: data.delivery?.method === "physical" ? "physical" : "email",
+              deliveryStatus: data.delivery?.method === "physical" ? "pending" : undefined,
             },
+            include: { event: true },
           });
+
+          // Créer l'adresse de livraison pour le premier billet seulement
+          if (data.delivery?.method === "physical" && i === 0 && item === data.items[0]) {
+            await tx.deliveryAddress.create({
+              data: {
+                ticketId: ticket.id,
+                recipientName: data.delivery.recipientName!,
+                recipientPhone: data.delivery.recipientPhone!,
+                zoneId: data.delivery.zoneId!,
+                additionalInfo: data.delivery.additionalInfo,
+                deliveryFee,
+              },
+            });
+          }
+
+          createdTickets.push(ticket);
         }
-
-        tickets.push(ticket);
       }
-    }
 
-    // Update attendees count
-    await eventRepository.update(data.eventId, { attendees: event.attendees + totalQty });
+      const capacityUpdate = await tx.event.updateMany({
+        where: { id: data.eventId, attendees: { lte: event.maxAttendees - totalQty } },
+        data: { attendees: { increment: totalQty } },
+      });
+      if (capacityUpdate.count === 0) {
+        throw new AppError("Nombre maximum de participants atteint", StatusCodes.BAD_REQUEST);
+      }
+
+      return createdTickets;
+    });
+
+    // Sync ticket vers Firestore (fire-and-forget, non bloquant)
+    for (const ticket of tickets) {
+      firestoreSyncService.syncTicket({
+        id: ticket.id,
+        eventId: ticket.eventId,
+        userId: ticket.userId,
+        type: ticket.category,
+        status: ticket.status,
+        qrCode: ticket.qrData,
+        usedAt: ticket.usedAt,
+        createdAt: ticket.createdAt,
+        updatedAt: ticket.updatedAt,
+      }).catch(() => {});
+    }
 
     // Créditer les points Feeti Na Feeti (fire-and-forget — ne bloque pas la réponse)
     const totalAmount = data.items.reduce((sum, i) => sum + i.price * i.quantity, 0);

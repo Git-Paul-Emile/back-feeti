@@ -6,11 +6,29 @@ if (!admin.apps.length) {
   let serviceAccount: admin.ServiceAccount | null = null;
 
   if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON) as admin.ServiceAccount;
+    try {
+      const parsed = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
+      if (parsed.private_key) {
+        parsed.private_key = parsed.private_key.replace(/\\n/g, "\n");
+      }
+      if (!parsed.project_id) {
+        console.error("[firebase-admin] FIREBASE_SERVICE_ACCOUNT_JSON ne contient pas de project_id");
+      }
+      serviceAccount = parsed as admin.ServiceAccount;
+    } catch (err) {
+      console.error("[firebase-admin] FIREBASE_SERVICE_ACCOUNT_JSON contient du JSON invalide:", err);
+    }
   } else {
     const serviceAccountPath = path.resolve(process.cwd(), "firebase-service-account.json");
     if (fs.existsSync(serviceAccountPath)) {
       serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf-8")) as admin.ServiceAccount;
+    } else {
+      console.error(
+        "[firebase-admin] Aucune credentials Firebase trouvée.\n" +
+        "  → Variable FIREBASE_SERVICE_ACCOUNT_JSON non définie\n" +
+        `  → Fichier ${serviceAccountPath} introuvable\n` +
+        "  Firebase Admin ne fonctionnera pas correctement."
+      );
     }
   }
 
@@ -21,6 +39,7 @@ if (!admin.apps.length) {
       storageBucket: `${(serviceAccount as any).project_id}.firebasestorage.app`,
     });
   } else {
+    console.error("[firebase-admin] Initialisation SANS credentials — les appels Firebase échoueront.");
     admin.initializeApp();
   }
 }

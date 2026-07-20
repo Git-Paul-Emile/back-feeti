@@ -280,35 +280,42 @@ export async function confirmDealPayment(params: {
   // Récupérer info établissement pour auto-remplir
   const item = await prisma.leisureItem.findUnique({ where: { id: dealPayment.leisureItemId } });
 
-  const deal = await prisma.deal.create({
-    data: {
-      title: String(rawDealData.title ?? ''),
-      description: String(rawDealData.description ?? ''),
-      category: String(rawDealData.category ?? 'general'),
-      originalPrice: Number(rawDealData.originalPrice ?? 0),
-      discountedPrice: Number(rawDealData.discountedPrice ?? 0),
-      discount: Number(rawDealData.discount ?? 0),
-      validUntil: String(rawDealData.validUntil ?? ''),
-      location: String(rawDealData.location ?? item?.location ?? ''),
-      image: String(rawDealData.image ?? item?.image ?? ''),
-      isPopular: Boolean(rawDealData.isPopular ?? false),
-      merchantName: String(rawDealData.merchantName ?? item?.name ?? ''),
-      tags: String(rawDealData.tags ?? '[]'),
-      availableQuantity: rawDealData.availableQuantity ? Number(rawDealData.availableQuantity) : undefined,
-      maxQuantity: rawDealData.maxQuantity ? Number(rawDealData.maxQuantity) : undefined,
-      contactPhone: rawDealData.contactPhone ? String(rawDealData.contactPhone) : item?.phone ?? undefined,
-      contactEmail: rawDealData.contactEmail ? String(rawDealData.contactEmail) : undefined,
-      contactWebsite: rawDealData.contactWebsite ? String(rawDealData.contactWebsite) : item?.website ?? undefined,
-      status: 'published',
-      leisureItemId: dealPayment.leisureItemId,
-      createdById: userId,
-    },
-    include: { leisureItem: { select: { id: true, name: true, image: true, address: true, location: true, phone: true, website: true } } },
-  });
+  // Créer le Deal et marquer le paiement comme réglé de façon atomique : si
+  // le marquage échoue, le Deal créé doit être annulé pour éviter qu'un
+  // retry sur le même paiement ne crée un Deal en double.
+  const deal = await prisma.$transaction(async (tx) => {
+    const created = await tx.deal.create({
+      data: {
+        title: String(rawDealData.title ?? ''),
+        description: String(rawDealData.description ?? ''),
+        category: String(rawDealData.category ?? 'general'),
+        originalPrice: Number(rawDealData.originalPrice ?? 0),
+        discountedPrice: Number(rawDealData.discountedPrice ?? 0),
+        discount: Number(rawDealData.discount ?? 0),
+        validUntil: String(rawDealData.validUntil ?? ''),
+        location: String(rawDealData.location ?? item?.location ?? ''),
+        image: String(rawDealData.image ?? item?.image ?? ''),
+        isPopular: Boolean(rawDealData.isPopular ?? false),
+        merchantName: String(rawDealData.merchantName ?? item?.name ?? ''),
+        tags: String(rawDealData.tags ?? '[]'),
+        availableQuantity: rawDealData.availableQuantity ? Number(rawDealData.availableQuantity) : undefined,
+        maxQuantity: rawDealData.maxQuantity ? Number(rawDealData.maxQuantity) : undefined,
+        contactPhone: rawDealData.contactPhone ? String(rawDealData.contactPhone) : item?.phone ?? undefined,
+        contactEmail: rawDealData.contactEmail ? String(rawDealData.contactEmail) : undefined,
+        contactWebsite: rawDealData.contactWebsite ? String(rawDealData.contactWebsite) : item?.website ?? undefined,
+        status: 'published',
+        leisureItemId: dealPayment.leisureItemId,
+        createdById: userId,
+      },
+      include: { leisureItem: { select: { id: true, name: true, image: true, address: true, location: true, phone: true, website: true } } },
+    });
 
-  await prisma.dealPayment.update({
-    where: { id: dealPayment.id },
-    data: { status: 'paid', dealId: deal.id },
+    await tx.dealPayment.update({
+      where: { id: dealPayment.id },
+      data: { status: 'paid', dealId: created.id },
+    });
+
+    return created;
   });
 
   return { deal, dealPayment: { ...dealPayment, status: 'paid', dealId: deal.id } };

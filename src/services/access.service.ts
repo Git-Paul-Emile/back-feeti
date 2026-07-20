@@ -10,7 +10,7 @@ import { firestoreSyncService } from "./firestore-sync.service.js";
 import { addEmailJob } from "../queues/email.queue.js";
 import { smsService } from "./sms.service.js";
 import { getIO } from "../config/socket.js";
-import type { ZoneAccessLevel } from "../generated/prisma/client.js";
+import { Prisma, type ZoneAccessLevel } from "../generated/prisma/client.js";
 
 // En production, ces secrets ne doivent jamais retomber sur une valeur prévisible
 // codée en dur (chiffrement des badges / code agent falsifiables). Le fallback ne
@@ -480,35 +480,56 @@ export const accessService = {
     const catByName = new Map(cats.map(c => [c.name.toLowerCase().trim(), c]));
     const defaultCat = cats[0];
 
-    const results = await Promise.all(
-      data.badges.map(async b => {
-        let cat = b.categoryId ? catById.get(b.categoryId) : undefined;
-        if (!cat && b.categoryName) cat = catByName.get(b.categoryName.toLowerCase().trim());
-        if (!cat) cat = defaultCat;
+    // Génération atomique : si un badge du lot échoue (ex: doublon d'email
+    // détecté par la contrainte unique DB en cas d'appel concurrent), tout le
+    // lot est annulé plutôt que de laisser un sous-ensemble de badges créés.
+    try {
+      const results = await prisma.$transaction(async (tx) => {
+        const created = [];
+        for (const b of data.badges) {
+          let cat = b.categoryId ? catById.get(b.categoryId) : undefined;
+          if (!cat && b.categoryName) cat = catByName.get(b.categoryName.toLowerCase().trim());
+          if (!cat) cat = defaultCat;
 
-        const badgeId = randomUUID();
-        const secret  = randomUUID();
-        const qrCode  = generateLegacyQrPayload(badgeId, eventId, cat.id, secret);
+          const badgeId = randomUUID();
+          const secret  = randomUUID();
+          const qrCode  = generateLegacyQrPayload(badgeId, eventId, cat.id, secret);
 
-        const badge = await accessRepository.createBadge({
-          eventId,
-          categoryId:  cat.id,
-          holderName:  b.holderName,
-          holderEmail: b.holderEmail,
-          createdById: userId,
-          ...(b.holderPhone && { holderPhone: b.holderPhone }),
-          qrCode,
-          qrSecret: secret,
-        });
+          const badge = await tx.accessBadge.create({
+            data: {
+              eventId,
+              categoryId:  cat.id,
+              holderName:  b.holderName,
+              holderEmail: b.holderEmail,
+              createdById: userId,
+              ...(b.holderPhone && { holderPhone: b.holderPhone }),
+              qrCode,
+              qrSecret: secret,
+            } as any,
+            include: { category: true, event: { select: { id: true, title: true } } },
+          });
 
-        const hydrated = await accessRepository.findBadgeById(badge.id);
-        if (!hydrated) return badge;
-        const finalQr = generateQrPayload(buildBadgePayload(hydrated as any), secret);
-        return accessRepository.updateBadge(badge.id, { qrCode: finalQr });
-      })
-    );
+          const hydrated = await tx.accessBadge.findUnique({
+            where: { id: badge.id },
+            include: { category: { include: { accessRights: { include: { zone: true } } } }, event: { select: { id: true, title: true } } },
+          });
+          if (!hydrated) {
+            created.push(badge);
+            continue;
+          }
+          const finalQr = generateQrPayload(buildBadgePayload(hydrated as any), secret);
+          created.push(await tx.accessBadge.update({ where: { id: badge.id }, data: { qrCode: finalQr } }));
+        }
+        return created;
+      });
 
-    return results;
+      return results;
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        throw new AppError("Un badge existe déjà pour l'un des emails fournis sur cet événement", StatusCodes.CONFLICT);
+      }
+      throw err;
+    }
   },
 
   async getBadges(eventId: string, userId: string, role: string) {

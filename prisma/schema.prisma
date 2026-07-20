@@ -1076,6 +1076,8 @@ model AccessBadge {
   accessLogs     AccessLog[]
   suspectReports SuspectBadgeReport[]
 
+  @@unique([eventId, holderEmail])
+
   @@index([eventId])
   @@index([createdById])
   @@index([status])
