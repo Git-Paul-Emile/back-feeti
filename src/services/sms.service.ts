@@ -1,29 +1,32 @@
-import { logger } from "../utils/logger.js";
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ *  SERVICE SMS — façade de compatibilité au-dessus de Telnyx.
+ *  Conserve l'API historique `smsService.send(to, message)` utilisée par
+ *  access.service (badges) et les tests, tout en déléguant l'envoi réel au
+ *  service de messagerie Telnyx (SMS). WhatsApp est exposé via `sendWhatsApp`.
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
+import { messagingService } from "./telnyx.service.js";
 
 export interface SmsResult {
-  provider: "webhook" | "simulation";
+  provider: "telnyx" | "simulation";
   delivered: boolean;
+  /** Identifiant Telnyx (suivi via webhook), si disponible. */
+  id?: string;
 }
 
 class SmsService {
+  /** Envoie un SMS. N'interrompt pas l'appelant en cas d'échec (best-effort). */
   async send(to: string, message: string): Promise<SmsResult> {
-    const webhookUrl = process.env.SMS_WEBHOOK_URL;
-    if (!webhookUrl) {
-      logger.info(`[SMS simulation] ${to}: ${message}`);
-      return { provider: "simulation", delivered: true };
-    }
+    const r = await messagingService.sendSms(to, message, { throwOnError: false });
+    return { provider: r.provider, delivered: r.delivered, id: r.id };
+  }
 
-    const response = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to, message }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`SMS provider error: ${response.status}`);
-    }
-
-    return { provider: "webhook", delivered: true };
+  /** Envoie un message WhatsApp. */
+  async sendWhatsApp(to: string, message: string): Promise<SmsResult> {
+    const r = await messagingService.sendWhatsApp(to, message, { throwOnError: false });
+    return { provider: r.provider, delivered: r.delivered, id: r.id };
   }
 }
 
