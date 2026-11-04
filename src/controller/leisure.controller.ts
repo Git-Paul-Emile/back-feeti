@@ -5,6 +5,7 @@ import { AppError } from '../utils/AppError.js';
 import { jsonResponse } from '../utils/response.js';
 import { controllerWrapper } from '../utils/ControllerWrapper.js';
 import { leisureRepository, type LeisureFilters } from '../repositories/leisure.repository.js';
+import { googlePlacesService } from '../services/googlePlaces.service.js';
 
 // ── Public ────────────────────────────────────────────────────────────────────
 
@@ -12,6 +13,15 @@ import { leisureRepository, type LeisureFilters } from '../repositories/leisure.
 export const getAllLeisureCategories = controllerWrapper(async (_req: Request, res: Response) => {
   const categories = await prisma.leisureCategory.findMany({ orderBy: { name: 'asc' } });
   res.status(StatusCodes.OK).json(jsonResponse({ status: 'success', message: 'Catégories récupérées', data: categories }));
+});
+
+// GET /api/leisure/google?countryCode=CG&categorySlug=restaurants
+// Établissements issus de Google Places pour le pays sélectionné
+export const getGoogleLeisureItems = controllerWrapper(async (req: Request, res: Response) => {
+  const { categorySlug, countryCode } = req.query as Record<string, string | undefined>;
+  if (!countryCode) throw new AppError('countryCode requis', StatusCodes.BAD_REQUEST);
+  const items = await googlePlacesService.searchLeisure(countryCode, categorySlug);
+  res.status(StatusCodes.OK).json(jsonResponse({ status: 'success', message: 'Loisirs Google récupérés', data: items }));
 });
 
 // GET /api/leisure

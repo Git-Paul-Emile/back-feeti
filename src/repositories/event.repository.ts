@@ -61,6 +61,8 @@ export const eventRepository = {
         status: "published",
         isPrivateForBadges: false,
         ...(countryCode ? { countryCode } : {}),
+        // Case « Afficher aussi sur Feeti » de la page événement (absente = visible)
+        OR: [{ eventPage: { is: null } }, { eventPage: { is: { showOnMainSite: true } } }],
       },
       include: { organizer: { select: { name: true } } },
       orderBy: { createdAt: "desc" },

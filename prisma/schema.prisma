@@ -148,6 +148,55 @@ model Event {
   promotionStartDate DateTime?
   promotionEndDate   DateTime?
   promotionPurchases PromotionPurchase[]
+  // Page événement publique ({slug}.feeti.io)
+  eventPage          EventPage?
+}
+
+// ─── Pages événement (sous-domaines {slug}.feeti.io) ─────────────────────────
+// Statut propre à la page, distinct de Event.status (modération admin) :
+// une page n'est visible que si la page est published/paused ET l'événement published.
+enum EventPageStatus {
+  draft
+  published
+  paused
+  archived
+}
+
+model EventPage {
+  id             String          @id @default(uuid())
+  // Nullable + SetNull : un événement supprimé laisse la page orpheline → réponse 410
+  eventId        String?         @unique
+  event          Event?          @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  slug           String          @unique
+  status         EventPageStatus @default(draft)
+  theme          Json?           // { accent, font, buttonStyle } — P1
+  heroImageUrl   String?         // surcharge du visuel (défaut : Event.image)
+  gallery        Json?           // liste ordonnée d'URL — P1
+  sections       Json?           // blocs activés — P1
+  ctaLabel       String?
+  seoTitle       String?
+  seoDescription String?
+  ogImageUrl     String?
+  showOnMainSite Boolean         @default(true)
+  publishedAt    DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  slugHistory    EventPageSlugHistory[]
+
+  @@index([status])
+  @@map("event_pages")
+}
+
+// Anciens slugs → redirection 301 vers le slug courant (12 mois)
+model EventPageSlugHistory {
+  id          String    @id @default(uuid())
+  slugOld     String    @unique
+  eventPageId String
+  eventPage   EventPage @relation(fields: [eventPageId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@index([eventPageId])
+  @@map("event_page_slug_history")
 }
 
 // Demande de formulaires PDF pour événements en live/mixte

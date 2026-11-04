@@ -9,6 +9,7 @@ import { feetiPlaySyncService } from "./feetiPlaySync.service.js";
 import { syncUpsertWithFallback, syncDeleteWithFallback } from "../queues/feetiPlaySync.queue.js";
 import { firestoreSyncService } from "./firestore-sync.service.js";
 import { db } from "../config/firebase-admin.js";
+import { eventPageService } from "./eventPage.service.js";
 
 const FEETIPLAY_LIVE_ID_PREFIX = "feeti2_live_";
 
@@ -90,6 +91,11 @@ export const eventService = {
     await firestoreSyncService.syncEvent(event).catch((err) => {
       logger.error(`Erreur sync Firestore pour event ${event.id}:`, err);
     });
+
+    // Page événement publique ({slug}.feeti.io), créée en brouillon.
+    // Non bloquant : un échec n'empêche pas la création de l'événement
+    // (la page est recréée à la première ouverture du back-office).
+    await eventPageService.ensurePageForEventSafe(event.id, event.title);
 
     // Pour STREAMING_LIVE et MIXTE : créer immédiatement dans FeetiPlay
     // avec isLive: false (événement "à venir", visible mais pas encore en direct).

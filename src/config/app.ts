@@ -34,6 +34,8 @@ import establishmentRouter from "../routes/establishment.routes.js";
 import notificationRouter from "../routes/notification.routes.js";
 import creatorRouter from "../routes/creator.routes.js";
 import newsletterRouter from "../routes/newsletter.routes.js";
+import contactRouter from "../routes/contact.routes.js";
+import { publicEventPageRouter, organizerEventPageRouter } from "../routes/eventPage.routes.js";
 
 const app = express();
 
@@ -58,11 +60,20 @@ export const allowedOrigins = [
   ...buildLocalhostOrigins(5173, 3),
 ];
 
+// Pages événement : https://{slug}.<EVENT_PAGES_ROOT_DOMAIN> et, en dev, http://{slug}.localhost:<port>
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const eventPagesRootDomain = process.env.EVENT_PAGES_ROOT_DOMAIN || "feeti.io";
+const eventPageOriginPatterns = [
+  new RegExp(`^https://[a-z0-9-]{1,63}\\.${escapeRegExp(eventPagesRootDomain)}$`),
+  ...(process.env.NODE_ENV?.trim() !== "production" ? [/^http:\/\/([a-z0-9-]{1,63}\.)?localhost:\d+$/] : []),
+];
+
 // Configuration CORS
 const corsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allowed?: boolean) => void) => {
     if (!origin) return callback(null, true);
     if (allowedOrigins.includes(origin)) return callback(null, true);
+    if (eventPageOriginPatterns.some((re) => re.test(origin))) return callback(null, true);
     logger.warn(`[CORS] Origine bloquée : ${origin}`);
     return callback(new Error('CORS policy: origin not allowed'), false);
   },
@@ -138,6 +149,10 @@ app.use('/api/creators', creatorRouter);
 app.use('/api/establishment', establishmentRouter);
 // ─── Newsletter (inscription footer + désinscription) ────────────────────────
 app.use('/api/newsletter', newsletterRouter);
+app.use('/api/contact', contactRouter);
+// ─── Pages événement ({slug}.feeti.io) ───────────────────────────────────────
+app.use('/api/public', publicEventPageRouter);
+app.use('/api/organizer/event-pages', organizerEventPageRouter);
 
 // Middleware pour routes non trouvées
 app.use((_req, res) => {

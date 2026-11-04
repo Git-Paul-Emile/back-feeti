@@ -3,6 +3,7 @@ import { authenticate } from '../middlewares/authenticate.js';
 import {
   getAllLeisureCategories,
   getAllLeisureItems,
+  getGoogleLeisureItems,
   getLeisureItemById,
   getMyLeisureFavorites,
   checkLeisureFavorite,
@@ -12,6 +13,7 @@ import {
 const router = Router();
 
 router.get('/categories', getAllLeisureCategories);
+router.get('/google', getGoogleLeisureItems);
 router.get('/favorites', authenticate, getMyLeisureFavorites);
 router.get('/:id/favorite', authenticate, checkLeisureFavorite);
 router.post('/:id/favorite', authenticate, toggleLeisureFavorite);
