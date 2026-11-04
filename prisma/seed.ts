@@ -12,6 +12,7 @@ import { seedBlogCategories } from './seeds/blogCategorySeeder.js';
 import { seedBlogPosts } from './seeds/blogPostSeeder.js';
 import { seedDeliveryZones } from './seeds/deliveryZoneSeeder.js';
 import { seedDeliveryCities } from './seeds/deliveryCitySeeder.js';
+import { seedPromotions } from './seeds/promotionSeeder.js';
 
 const prisma = new PrismaClient();
 
@@ -31,6 +32,11 @@ async function main() {
   await seedBlogPosts(prisma, admin.id);
   const zoneIdMap = await seedDeliveryZones(prisma);
   await seedDeliveryCities(prisma, zoneIdMap);
+
+  // En dernier : les promotions ont besoin d'événements déjà publiés en base.
+  // Sans cette étape, le hero slider (pack OR), l'ArgentSlider et la section
+  // « Événements à la une » (pack BRONZE) restent VIDES sur la page d'accueil.
+  await seedPromotions(prisma);
 
   console.log('');
   console.log('🎉 Seeding terminé !');

@@ -15,7 +15,8 @@
     "test:weekly-digest": "tsx scripts/test-weekly-digest.ts",
     "generate": "npx prisma generate",
     "migrate": "npx prisma migrate dev",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "seed:promotions": "tsx prisma/seedPromotions.ts"
   },
   "keywords": [],
   "author": "",
