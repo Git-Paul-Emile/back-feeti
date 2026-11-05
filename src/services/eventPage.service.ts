@@ -132,7 +132,7 @@ export function publicationBlockers(event: EventRow, heroImageUrl?: string | nul
   if (!event.location?.trim()) missing.push("lieu");
   if (!(heroImageUrl || event.image)?.trim()) missing.push("visuel principal");
   if (parseTicketTypes(event).length === 0) missing.push("au moins un billet");
-  if (event.status !== "published") missing.push("validation de l'événement par Feeti");
+  if (event.status !== "published") missing.push("validation de l'événement par Fééti");
   return missing;
 }
 
@@ -392,7 +392,7 @@ export const eventPageService = {
         },
         cta: { label: page.ctaLabel || "Prendre mon billet" },
         seo: {
-          title: page.seoTitle || `${event.title} — Billets | Feeti`.slice(0, 60),
+          title: page.seoTitle || `${event.title} | Billets Fééti`.slice(0, 60),
           description: description.slice(0, 155),
           ogImage: page.ogImageUrl || hero,
           canonical: pageUrl,
