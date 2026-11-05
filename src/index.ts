@@ -23,7 +23,6 @@ const initializeApp = async () => {
     await connectToDatabase();
     startEmailWorker();
     startFeetiPlaySyncWorker();
-    await scheduleWeeklyDigestCampaign();
 
     const configuredPort = Number(process.env.PORT || DEFAULT_BACKEND_PORT);
     const port = Number.isInteger(configuredPort) && configuredPort > 0
@@ -41,6 +40,12 @@ const initializeApp = async () => {
     process.env.PORT = String(port);
     logger.info(`[feeti2-back] port configure: ${port}`);
     logger.info(`[feeti2-back] serveur demarre sur http://localhost:${port}`);
+
+    // Après l'ouverture du port : si Redis est injoignable, la commande BullMQ reste en
+    // attente (maxRetriesPerRequest: null) et ne doit pas empêcher l'API de démarrer.
+    scheduleWeeklyDigestCampaign().catch((err) =>
+      logger.error("[feeti2-back] planification du digest hebdomadaire impossible :", err)
+    );
   } catch (err) {
     console.error("Erreur au demarrage :", err);
     process.exit(1);
