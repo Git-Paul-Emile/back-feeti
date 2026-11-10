@@ -52,8 +52,21 @@ export const emailQueue = new Queue<EmailJobData>("emails", {
 
 // ─── Helper d'ajout ───────────────────────────────────────────────────────────
 
+// Si Redis est injoignable, BullMQ attend indéfiniment (maxRetriesPerRequest: null) :
+// on borne l'attente pour que l'appelant bascule sur son envoi direct au lieu de
+// bloquer la requête HTTP (achat de billet, inscription...).
+export const QUEUE_ADD_TIMEOUT_MS = 3000;
+
+export function withQueueTimeout<T>(operation: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`file ${label} injoignable (délai de ${QUEUE_ADD_TIMEOUT_MS} ms dépassé)`)), QUEUE_ADD_TIMEOUT_MS);
+  });
+  return Promise.race([operation, timeout]).finally(() => clearTimeout(timer));
+}
+
 export async function addEmailJob(job: EmailJobData): Promise<void> {
-  await emailQueue.add(job.type, job);
+  await withQueueTimeout(emailQueue.add(job.type, job), "emails");
 }
 
 // ─── Campagne récurrente : "Les Fééties de la semaine" ─────────────────────

@@ -16,7 +16,8 @@ export const registerSchema = z.object({
     .min(8, "Le mot de passe doit contenir au moins 8 caractères")
     .regex(/[A-Z]/, "Le mot de passe doit contenir au moins une majuscule")
     .regex(/[0-9]/, "Le mot de passe doit contenir au moins un chiffre"),
-  role: z.enum(["user", "organizer"]).optional(),
+  // Rôles auto-attribuables à l'inscription ; admin, contrôleur et modérateur sont attribués par un admin
+  role: z.enum(["user", "organizer", "establishment_owner"]).optional(),
   interests: z.array(z.string()).optional(),
   country: z.string().min(1, "Le pays est requis"),
   city: z.string().min(1, "La ville est requise"),
@@ -80,7 +81,8 @@ export const firebaseRegisterSchema = z.object({
     .regex(/^\+?[0-9]{8,15}$/, "Numéro de téléphone invalide")
     .optional()
     .or(z.literal("")),
-  role: z.enum(["user", "organizer"]).optional(),
+  // Rôles auto-attribuables à l'inscription ; admin, contrôleur et modérateur sont attribués par un admin
+  role: z.enum(["user", "organizer", "establishment_owner"]).optional(),
   interests: z.array(z.string()).optional(),
   country: z.string().min(1, "Le pays est requis"),
   city: z.string().min(1, "La ville est requise"),

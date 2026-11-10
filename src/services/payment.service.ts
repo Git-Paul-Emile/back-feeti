@@ -132,13 +132,13 @@ export const paymentService = {
 
     mobileMoneyTxs.set(id, tx);
 
-    // Simulation : complétée après 5 secondes (l'utilisateur "confirme sur son téléphone")
+    // Simulation : complétée après 3 secondes (l'utilisateur "confirme sur son téléphone")
     setTimeout(() => {
       const t = mobileMoneyTxs.get(id);
       if (t && t.status === "pending") {
         mobileMoneyTxs.set(id, { ...t, status: "completed", completedAt: new Date() });
       }
-    }, 5000);
+    }, 3000);
 
     return {
       transactionId: id,

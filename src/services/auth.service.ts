@@ -107,7 +107,7 @@ export const authService = {
     const refreshToken = generateRefreshToken({ userId: user.id });
 
     logger.info(`[auth] inscription OK — rôle: ${user.role}, email: ${user.email}`);
-    await enqueueWelcomeEmail(user);
+    void enqueueWelcomeEmail(user); // email en arrière-plan : la réponse n'attend pas
 
     return { user: omitPassword(user), accessToken, refreshToken };
   },
@@ -243,7 +243,7 @@ export const authService = {
       });
 
       logger.info(`[auth] inscription Firebase OK — rôle: ${user.role}, email: ${user.email}`);
-      await enqueueWelcomeEmail(user);
+      void enqueueWelcomeEmail(user); // email en arrière-plan : la réponse n'attend pas
     } else {
       const updates: {
         firebaseUid?: string;
@@ -281,7 +281,7 @@ export const authService = {
 
       if (shouldSendWelcomeEmail) {
         logger.info(`[auth] rôle mis à jour vers organizer pour ${user.email}, préparation de l'email de bienvenue`);
-        await enqueueWelcomeEmail(user);
+        void enqueueWelcomeEmail(user); // email en arrière-plan : la réponse n'attend pas
       }
     }
 

@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => ({
   deliveryAddressCreate: vi.fn(),
   eventServiceGetById: vi.fn(),
   prismaTicketFindUnique: vi.fn().mockResolvedValue(null),
+  eventUpdateMany: vi.fn().mockResolvedValue({ count: 1 }),
   prismaTicketFindFirst: vi.fn().mockResolvedValue(null),
 }));
 
@@ -57,6 +58,13 @@ vi.mock("../config/database.js", () => ({
     deliveryZone: { findUnique: mocks.deliveryZoneFindUnique },
     deliveryAddress: { create: mocks.deliveryAddressCreate },
     ticket: { findUnique: mocks.prismaTicketFindUnique, findFirst: mocks.prismaTicketFindFirst },
+    // L'achat est transactionnel : le callback reçoit un client « tx »
+    $transaction: async (fn: (tx: unknown) => unknown) =>
+      fn({
+        ticket: { create: mocks.ticketCreate },
+        deliveryAddress: { create: mocks.deliveryAddressCreate },
+        event: { updateMany: mocks.eventUpdateMany },
+      }),
   },
 }));
 
@@ -219,10 +227,11 @@ describe("purchaseTickets — guards métier", () => {
 
     await ticketService.purchaseTickets(PURCHASE_DATA);
 
-    expect(mocks.eventUpdate).toHaveBeenCalledWith(
-      PUBLISHED_EVENT.id,
-      { attendees: PUBLISHED_EVENT.attendees + 1 }
-    );
+    // Incrément atomique avec garde de capacité (anti-surréservation)
+    expect(mocks.eventUpdateMany).toHaveBeenCalledWith({
+      where: { id: PUBLISHED_EVENT.id, attendees: { lte: PUBLISHED_EVENT.maxAttendees - 1 } },
+      data: { attendees: { increment: 1 } },
+    });
   });
 });
 

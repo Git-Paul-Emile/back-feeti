@@ -245,14 +245,17 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
     currency: ticketsWithQR[0]?.currency ?? "FCFA",
   };
 
-  try {
-    await addEmailJob({ type: "ticket-confirmation", to: holderEmail, data: emailData });
-  } catch (queueErr) {
-    logger.warn("[payment] Queue Redis indisponible, envoi direct SMTP:", (queueErr as Error).message);
-    emailService.sendTicketConfirmation(holderEmail, emailData).catch((smtpErr) =>
-      console.error("[payment] Échec envoi email confirmation billet:", (smtpErr as Error).message)
-    );
-  }
+  // Email envoyé après la réponse : l'acheteur n'attend pas la file ou le SMTP
+  const sendConfirmationEmail = async () => {
+    try {
+      await addEmailJob({ type: "ticket-confirmation", to: holderEmail, data: emailData });
+    } catch (queueErr) {
+      logger.warn("[payment] Queue Redis indisponible, envoi direct SMTP:", (queueErr as Error).message);
+      emailService.sendTicketConfirmation(holderEmail, emailData).catch((smtpErr) =>
+        console.error("[payment] Échec envoi email confirmation billet:", (smtpErr as Error).message)
+      );
+    }
+  };
 
   res.status(StatusCodes.CREATED).json(
     jsonResponse({
@@ -266,6 +269,7 @@ export const confirmPaymentAndPurchase = controllerWrapper(async (req: Request, 
       },
     })
   );
+  void sendConfirmationEmail();
 });
 
 // ─── Vérification seule (service-à-service) ──────────────────────────

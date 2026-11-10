@@ -136,7 +136,7 @@ describe("publicationBlockers", () => {
 
   it("liste les manques", () => {
     expect(publicationBlockers({ ...base, image: "", location: " ", status: "draft" })).toEqual([
-      "lieu", "visuel principal", "validation de l'événement par Feeti",
+      "lieu", "visuel principal", "validation de l'événement par Fééti",
     ]);
   });
 

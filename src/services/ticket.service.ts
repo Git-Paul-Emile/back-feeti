@@ -1,5 +1,6 @@
 import { StatusCodes } from "http-status-codes";
 import { AppError } from "../utils/AppError.js";
+import { logger } from "../utils/logger.js";
 import { ticketRepository } from "../repositories/ticket.repository.js";
 import { eventRepository } from "../repositories/event.repository.js";
 import { eventService } from "./event.service.js";
@@ -86,6 +87,10 @@ export const ticketService = {
       }
       const zone = await prisma.deliveryZone.findUnique({ where: { id: data.delivery.zoneId } });
       if (!zone) throw new AppError("Zone de livraison introuvable", StatusCodes.NOT_FOUND);
+      // La livraison se fait dans le pays de l'événement
+      if (event?.countryCode && zone.countryCode !== event.countryCode) {
+        throw new AppError("Cette zone de livraison n'appartient pas au pays de l'événement", StatusCodes.BAD_REQUEST);
+      }
       deliveryFee = zone.fee;
     }
 
@@ -166,7 +171,9 @@ export const ticketService = {
 
     // Créditer les points Feeti Na Feeti (fire-and-forget — ne bloque pas la réponse)
     const totalAmount = data.items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-    loyaltyService.onTicketPurchase(data.userId, totalAmount, tickets[0]?.id ?? orderId).catch(() => {});
+    loyaltyService.onTicketPurchase(data.userId, totalAmount, tickets[0]?.id ?? orderId).catch((err) =>
+      logger.error("[loyalty] Points d'achat non crédités:", err)
+    );
 
     return { orderId, tickets, deliveryFee, organizerId: event.organizerId };
   },
@@ -237,7 +244,9 @@ export const ticketService = {
     const updated = await ticketRepository.updateStatus(ticket.id, "used", new Date());
 
     // Créditer les points de présence Feeti Na Feeti (fire-and-forget)
-    loyaltyService.onEventAttendance(ticket.userId, ticket.eventId).catch(() => {});
+    loyaltyService.onEventAttendance(ticket.userId, ticket.eventId).catch((err) =>
+      logger.error("[loyalty] Points de présence non crédités:", err)
+    );
 
     return { ticket: updated, message: "Billet validé avec succès" };
   },

@@ -52,20 +52,28 @@ export const loyaltyRepository = {
     referenceType?: string
   ) {
     return prisma.$transaction(async (tx) => {
-      const profile = await tx.loyaltyProfile.findUniqueOrThrow({ where: { id: profileId } });
-      const balanceBefore = profile.points;
-      const balanceAfter = balanceBefore + delta;
-
+      // Incrément atomique : deux opérations simultanées (gain d'achat et
+      // déduction de points, par exemple) ne peuvent plus s'écraser.
       const isEarning = delta > 0;
-      const updated = await tx.loyaltyProfile.update({
-        where: { id: profileId },
-        data: {
-          points: balanceAfter,
-          pointsEarned: isEarning ? { increment: delta } : undefined,
-          pointsSpent: !isEarning ? { increment: Math.abs(delta) } : undefined,
-          level: computeLevel(balanceAfter),
-        },
-      });
+      if (!isEarning) {
+        const { count } = await tx.loyaltyProfile.updateMany({
+          where: { id: profileId, points: { gte: Math.abs(delta) } },
+          data: { points: { increment: delta }, pointsSpent: { increment: Math.abs(delta) } },
+        });
+        if (count === 0) throw new Error("Points insuffisants");
+      } else {
+        await tx.loyaltyProfile.update({
+          where: { id: profileId },
+          data: { points: { increment: delta }, pointsEarned: { increment: delta } },
+        });
+      }
+      const current = await tx.loyaltyProfile.findUniqueOrThrow({ where: { id: profileId } });
+      const balanceAfter = current.points;
+      const balanceBefore = balanceAfter - delta;
+      const level = computeLevel(balanceAfter);
+      const updated = current.level === level
+        ? current
+        : await tx.loyaltyProfile.update({ where: { id: profileId }, data: { level } });
 
       await tx.pointsLedger.create({
         data: {
@@ -380,7 +388,8 @@ export const loyaltyRepository = {
   async getActiveBonuses(actionType?: string) {
     const now = new Date();
     const where: any = { isActive: true, startDate: { lte: now }, endDate: { gte: now } };
-    if (actionType) where.actionType = { in: [actionType, null] };
+    // Bonus ciblé sur cette action, ou bonus général (actionType vide)
+    if (actionType) where.OR = [{ actionType }, { actionType: null }];
     return prisma.loyaltyBonus.findMany({ where, orderBy: { value: "desc" } });
   },
 

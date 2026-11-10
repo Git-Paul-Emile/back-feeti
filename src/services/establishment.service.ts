@@ -1,3 +1,5 @@
+import { AppError } from "../utils/AppError.js";
+import { StatusCodes } from "http-status-codes";
 import { prisma } from '../config/database.js';
 import { paymentService } from './payment.service.js';
 import { randomUUID } from 'crypto';
@@ -195,6 +197,15 @@ export async function initiateDealPayment(params: {
   const hasActiveSub = await checkActiveSubscription(userId, leisureItemId);
   if (!hasActiveSub) throw new Error('Abonnement annuel requis et actif pour publier un bon plan');
 
+  // Le bon plan doit être complet avant tout paiement (sinon publication d'une offre vide)
+  const title = String(dealData.title ?? '').trim();
+  const originalPrice = Number(dealData.originalPrice ?? 0);
+  const discountedPrice = Number(dealData.discountedPrice ?? 0);
+  if (title.length < 3) throw new AppError('Titre du bon plan requis (3 caractères minimum)', StatusCodes.BAD_REQUEST);
+  if (!(originalPrice > 0)) throw new AppError("Prix d'origine requis", StatusCodes.BAD_REQUEST);
+  if (!(discountedPrice >= 0) || discountedPrice >= originalPrice) throw new AppError("Le prix remisé doit être inférieur au prix d'origine", StatusCodes.BAD_REQUEST);
+  if (!dealData.validUntil) throw new AppError('Date de fin de validité requise', StatusCodes.BAD_REQUEST);
+
   const pricing = await getPricing();
 
   let paymentRef: string;
@@ -293,8 +304,8 @@ export async function confirmDealPayment(params: {
         discountedPrice: Number(rawDealData.discountedPrice ?? 0),
         discount: Number(rawDealData.discount ?? 0),
         validUntil: String(rawDealData.validUntil ?? ''),
-        location: String(rawDealData.location ?? item?.location ?? ''),
-        image: String(rawDealData.image ?? item?.image ?? ''),
+        location: String(rawDealData.location || item?.location || ''),
+        image: String(rawDealData.image || item?.image || ''),
         isPopular: Boolean(rawDealData.isPopular ?? false),
         merchantName: String(rawDealData.merchantName ?? item?.name ?? ''),
         tags: String(rawDealData.tags ?? '[]'),

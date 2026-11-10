@@ -1,3 +1,4 @@
+import { withQueueTimeout } from "./email.queue.js";
 import { Queue } from "bullmq";
 import { redisForQueue } from "../config/redis.js";
 import { feetiPlaySyncService, type SyncPayload } from "../services/feetiPlaySync.service.js";
@@ -25,11 +26,11 @@ export const feetiPlaySyncQueue = new Queue<FeetiPlaySyncJobData>("feetiplay-syn
 });
 
 export async function addFeetiPlayUpsertJob(payload: SyncPayload): Promise<void> {
-  await feetiPlaySyncQueue.add("upsert", { type: "upsert", payload });
+  await withQueueTimeout(feetiPlaySyncQueue.add("upsert", { type: "upsert", payload }), "feetiplay-sync");
 }
 
 export async function addFeetiPlayDeleteJob(id: string): Promise<void> {
-  await feetiPlaySyncQueue.add("delete", { type: "delete", id });
+  await withQueueTimeout(feetiPlaySyncQueue.add("delete", { type: "delete", id }), "feetiplay-sync");
 }
 
 // ─── Helpers avec repli direct ────────────────────────────────────────────────
