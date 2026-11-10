@@ -77,8 +77,8 @@ export const walletService = {
       soldeCalcule: balanceCalculee,
       ecart,
       message: coherent
-        ? "✅ Intégrité du wallet vérifiée — les soldes correspondent"
-        : `⚠️ Anomalie détectée — écart de ${ecart} centimes (${formatMontant(Math.abs(ecart), wallet.devise)})`,
+        ? "Intégrité du wallet vérifiée — les soldes correspondent"
+        : `Anomalie détectée — écart de ${ecart} centimes (${formatMontant(Math.abs(ecart), wallet.devise)})`,
     };
   },
 

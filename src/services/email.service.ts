@@ -145,7 +145,7 @@ const DIGEST_BONPLAN_PHOTO_URL = `${EMAIL_ASSET_BASE_URL}/email/bonplan-products
 
 /** Petite illustration ballons + confettis (bandeau des mails de bienvenue). */
 function celebrationArt(): string {
-  return `<div style="font-size:40px;line-height:1;">🎈🎉✨🎊🎈</div>`;
+  return ''; // illustration décorative retirée
 }
 
 /** Illustration "mot de passe" (undraw_enter-password) — pour le reset password (fond navy). */
@@ -336,7 +336,7 @@ export function templateTicketConfirmation(data: {
     .map(
       (t, i) => `
     <div style="border:1px solid #e5e7eb;border-radius:10px;padding:20px;margin-bottom:16px;position:relative;overflow:hidden;">
-      <div style="position:absolute;top:0;left:0;bottom:0;width:6px;background:linear-gradient(135deg,#4338ca,#7c3aed);border-radius:0;"></div>
+      <div style="position:absolute;top:0;left:0;bottom:0;width:6px;background:#4338ca;border-radius:0;"></div>
       <div style="margin-left:16px;">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;">
           <div>
@@ -348,7 +348,7 @@ export function templateTicketConfirmation(data: {
           </div>
         </div>
         <p style="margin:10px 0 4px;font-size:11px;color:#9ca3af;font-family:monospace;">Réf : ${t.id.slice(-12).toUpperCase()}</p>
-        <a href="${API_URL}/api/tickets/${t.id}/download" style="display:inline-block;margin-top:12px;background:linear-gradient(135deg,#4338ca,#7c3aed);color:#ffffff;text-decoration:none;padding:9px 22px;border-radius:8px;font-size:14px;font-weight:600;">
+        <a href="${API_URL}/api/tickets/${t.id}/download" style="display:inline-block;margin-top:12px;background:#4338ca;color:#ffffff;text-decoration:none;padding:9px 22px;border-radius:8px;font-size:14px;font-weight:600;">
           ⬇ Télécharger
         </a>
       </div>
@@ -457,8 +457,8 @@ export function templateWelcomeOrganizer(data: { organizerName: string; email?: 
         Pour finaliser votre partenariat avec Féeti, veuillez lire et signer le contrat ci-dessous.
         Cette étape est obligatoire pour publier vos événements.
       </p>
-      <a href="${data.pandadocSigningUrl}" style="display:inline-block;background:linear-gradient(135deg,#d97706,#f59e0b);color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;font-weight:700;">
-        ✍️ Signer mon contrat
+      <a href="${data.pandadocSigningUrl}" style="display:inline-block;background:#d97706;color:#ffffff;text-decoration:none;padding:14px 36px;border-radius:8px;font-size:16px;font-weight:700;">
+        Signer mon contrat
       </a>
       <p style="margin:16px 0 0;color:#9ca3af;font-size:12px;">
         Ce lien est valable 7 jours. Après votre signature, le directeur Féeti contresignera.
@@ -867,7 +867,7 @@ class EmailService {
   ): Promise<void> {
     await this.provider.send({
       to,
-      subject: `✅ Vos billets pour « ${data.eventTitle} » — Commande #${data.orderId.slice(0, 8).toUpperCase()}`,
+      subject: `Vos billets pour « ${data.eventTitle} » — Commande #${data.orderId.slice(0, 8).toUpperCase()}`,
       html: templateTicketConfirmation(data),
       text: `Bonjour ${data.holderName}, vos billets pour ${data.eventTitle} sont confirmés. Commande: ${data.orderId}`,
     });
@@ -944,7 +944,7 @@ class EmailService {
   async sendEventApproved(to: string, data: Parameters<typeof templateEventApproved>[0]): Promise<void> {
     await this.provider.send({
       to,
-      subject: `✅ Votre événement "${data.eventTitle}" a été approuvé !`,
+      subject: `Votre événement "${data.eventTitle}" a été approuvé !`,
       html: templateEventApproved(data),
       text: `Bonjour ${data.organizerName}, votre événement "${data.eventTitle}" a été approuvé et est maintenant visible sur Féeti.`,
     });
@@ -953,7 +953,7 @@ class EmailService {
   async sendEventRejected(to: string, data: Parameters<typeof templateEventRejected>[0]): Promise<void> {
     await this.provider.send({
       to,
-      subject: `❌ Votre événement "${data.eventTitle}" n'a pas été approuvé`,
+      subject: `Votre événement "${data.eventTitle}" n'a pas été approuvé`,
       html: templateEventRejected(data),
       text: `Bonjour ${data.organizerName}, votre événement "${data.eventTitle}" n'a pas été approuvé. Raison : ${data.rejectionReason}`,
     });
@@ -966,7 +966,7 @@ class EmailService {
   ): Promise<void> {
     await this.provider.send({
       to,
-      subject: `✨ Les Fééties de la semaine — ${data.content.monthLabel} ${data.content.yearLabel}`,
+      subject: `Les Fééties de la semaine — ${data.content.monthLabel} ${data.content.yearLabel}`,
       html: templateWeeklyDigest({ content: data.content, recipientEmail: to, unsubscribeUrl: data.unsubscribeUrl }),
       text: `Découvrez le top des événements, les bons plans et le live streaming de la semaine sur Féeti : ${FRONT_URL}`,
     });

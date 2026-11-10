@@ -264,17 +264,17 @@ describe("verifierCohérenceRepartition", () => {
     expect(check.coherent).toBe(false);
   });
 
-  it("message de succès contient '✅'", () => {
+  it("message de succès explicite", () => {
     const r = calculerRepartitionFinanciere(BILLET_10K);
     const check = verifierCohérenceRepartition(r);
-    expect(check.details).toContain("✅");
+    expect(check.details).toContain("Cohérence vérifiée");
   });
 
-  it("message d'erreur contient '❌'", () => {
+  it("message d'erreur explicite", () => {
     const r = calculerRepartitionFinanciere(BILLET_10K);
     const altere = { ...r, commission: 0 };
     const check = verifierCohérenceRepartition(altere);
-    expect(check.details).toContain("❌");
+    expect(check.details).toContain("Incohérence détectée");
   });
 });
 

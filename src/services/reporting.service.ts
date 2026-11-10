@@ -303,7 +303,7 @@ export const reportingService = {
     }));
 
     const alertes: string[] = [];
-    if (litiges > 10) alertes.push(`⚠️ ${litiges} transactions en litige`);
+    if (litiges > 10) alertes.push(`${litiges} transactions en litige`);
 
     const repartitionParStatut = transactionsParStatut.map((t) => ({
       status: t.status,

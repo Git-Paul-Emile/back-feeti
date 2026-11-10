@@ -229,8 +229,8 @@ export function verifierCohérenceRepartition(
     netOrganisateur === netCalc;
 
   const details = coherent
-    ? `✅ Cohérence vérifiée: TTC=${prixTTC}, HT=${prixHT}, TVA=${tva}, Commission=${commission}, Net=${netOrganisateur}`
-    : `❌ Incohérence détectée — Reçu: HT=${prixHT}/TVA=${tva}/Comm=${commission}/Net=${netOrganisateur} | ` +
+    ? `Cohérence vérifiée: TTC=${prixTTC}, HT=${prixHT}, TVA=${tva}, Commission=${commission}, Net=${netOrganisateur}`
+    : `Incohérence détectée — Reçu: HT=${prixHT}/TVA=${tva}/Comm=${commission}/Net=${netOrganisateur} | ` +
       `Attendu: HT=${prixHTCalc}/TVA=${tvaCalc}/Comm=${commissionCalc}/Net=${netCalc} | ` +
       `Écart fiscal: ${ecartFiscal}, Écart distrib: ${ecartDistrib}`;
 

@@ -223,7 +223,7 @@ describe("verifierIntegrite", () => {
 
     const result = await walletService.verifierIntegrite("org-1");
 
-    expect(result.message).toContain("✅");
+    expect(result.message).toContain("Intégrité du wallet vérifiée");
   });
 
   it("message négatif si écart détecté", async () => {
@@ -232,7 +232,7 @@ describe("verifierIntegrite", () => {
 
     const result = await walletService.verifierIntegrite("org-1");
 
-    expect(result.message).toContain("⚠️");
+    expect(result.message).toContain("Anomalie détectée");
   });
 });
 
