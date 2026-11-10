@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { authenticate, requireRole } from "../middlewares/authenticate.js";
-import { getAllUsers, updateUserRole, deleteUser, updateEventStatus, getAllAdminEvents, getTicketsStats, getAdminTickets, getAllCountriesAdmin, updateEventPromotion, getPromotionSlots, updateLeisurePromotion, getLeisurePromotionSlots, getAdminPromotions, getAdminPromotionStats, deactivatePromotion, getAdminPackConfigs, updatePackConfig, getDealPromotionSlots, updateDealPromotion } from "../controller/admin.controller.js";
+import { getAllUsers, updateUserRole, deleteUser, updateEventStatus, getAllAdminEvents, getTicketsStats, getAdminTickets, getRefundRequests, decideRefund, getAllCountriesAdmin, updateEventPromotion, getPromotionSlots, updateLeisurePromotion, getLeisurePromotionSlots, getAdminPromotions, getAdminPromotionStats, deactivatePromotion, getAdminPackConfigs, updatePackConfig, getDealPromotionSlots, updateDealPromotion } from "../controller/admin.controller.js";
 import { createDeal, updateDeal, deleteDeal, getAllDealsAdmin } from "../controller/deal.controller.js";
 import { createDealCategory, updateDealCategory, deleteDealCategory } from "../controller/dealCategory.controller.js";
 import {
@@ -94,6 +94,8 @@ router.get("/badge-orders", getAdminBadgeOrders);
 
 // Tickets admin routes
 router.get("/tickets/stats", getTicketsStats);
+router.get("/tickets/refund-requests", getRefundRequests);
+router.post("/tickets/:id/refund", decideRefund);
 router.get("/tickets", getAdminTickets);
 
 export default router;

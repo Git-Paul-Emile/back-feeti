@@ -248,7 +248,8 @@ export const ticketService = {
       logger.error("[loyalty] Points de présence non crédités:", err)
     );
 
-    return { ticket: updated, message: "Billet validé avec succès" };
+    // updateStatus ne renvoie pas l'événement : on le rattache pour l'écran du contrôleur
+    return { ticket: { ...updated, event: ticket.event }, message: "Billet validé avec succès" };
   },
 
   async requestRefund(ticketId: string, userId: string, reason: string) {

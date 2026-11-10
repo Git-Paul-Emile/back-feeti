@@ -8,6 +8,8 @@ import type { Role } from "../generated/prisma/client.js";
 import { eventRepository } from "../repositories/event.repository.js";
 import { emailService } from "../services/email.service.js";
 import { feetiPlaySyncService } from "../services/feetiPlaySync.service.js";
+import { transactionService } from "../services/transaction.service.js";
+import { logger } from "../utils/logger.js";
 
 // GET /api/admin/countries — returns ALL countries (including inactive)
 export const getAllCountriesAdmin = controllerWrapper(async (_req: Request, res: Response) => {
@@ -619,4 +621,68 @@ export const updateLeisurePromotion = controllerWrapper(async (req: Request, res
   res.status(StatusCodes.OK).json(
     jsonResponse({ status: "success", message: "Promotion loisir mise à jour", data: updated })
   );
+});
+
+// GET /api/admin/tickets/refund-requests — demandes de remboursement en attente
+export const getRefundRequests = controllerWrapper(async (_req: Request, res: Response) => {
+  const tickets = await prisma.ticket.findMany({
+    where: { status: "refund_requested" },
+    include: {
+      event: { select: { id: true, title: true, date: true } },
+      user: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: { refundRequestedAt: "asc" },
+  });
+  res.status(StatusCodes.OK).json(
+    jsonResponse({ status: "success", message: "Demandes de remboursement récupérées", data: tickets })
+  );
+});
+
+// POST /api/admin/tickets/:id/refund — { decision: "approve" | "reject" }
+// Paiements simulés : l'acceptation marque le billet remboursé, libère la place
+// et passe la transaction financière en « refunded ».
+export const decideRefund = controllerWrapper(async (req: Request, res: Response) => {
+  const { decision } = req.body as { decision?: "approve" | "reject" };
+  if (decision !== "approve" && decision !== "reject") {
+    throw new AppError("Décision invalide (approve ou reject)", StatusCodes.BAD_REQUEST);
+  }
+  const ticket = await prisma.ticket.findUnique({ where: { id: String(req.params.id) } });
+  if (!ticket) throw new AppError("Billet introuvable", StatusCodes.NOT_FOUND);
+  if (ticket.status !== "refund_requested") {
+    throw new AppError("Aucune demande de remboursement en attente pour ce billet", StatusCodes.BAD_REQUEST);
+  }
+
+  if (decision === "reject") {
+    const updated = await prisma.ticket.update({ where: { id: ticket.id }, data: { status: "valid" } });
+    res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Demande refusée, billet de nouveau valide", data: updated }));
+    return;
+  }
+
+  const updated = await prisma.$transaction(async (tx) => {
+    const t = await tx.ticket.update({ where: { id: ticket.id }, data: { status: "refunded" } });
+    await tx.event.updateMany({
+      where: { id: ticket.eventId, attendees: { gt: 0 } },
+      data: { attendees: { decrement: 1 } },
+    });
+    return t;
+  });
+
+  // Transaction financière (absente pour un billet gratuit)
+  const financial = await prisma.transaction.findUnique({ where: { ticketId: ticket.id } });
+  if (financial) {
+    try {
+      // Sans montant explicite, le portefeuille organisateur est débité du net perçu
+      const reason = ticket.refundReason ?? "Remboursement accepté par l'administration";
+      await transactionService.changerStatut(
+        financial.id,
+        "refunded",
+        { id: req.user!.userId, role: req.user!.role, ip: req.ip, userAgent: req.headers["user-agent"] },
+        { reason, refundReason: reason }
+      );
+    } catch (err) {
+      logger.error(`[refund] Transaction ${financial.id} non passée en remboursée:`, err);
+    }
+  }
+
+  res.status(StatusCodes.OK).json(jsonResponse({ status: "success", message: "Remboursement accepté (simulation)", data: updated }));
 });

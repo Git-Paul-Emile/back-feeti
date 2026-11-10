@@ -39,7 +39,7 @@ const ALLOWED_TRANSITIONS: Record<TransactionStatus, TransactionStatus[]> = {
   pending:            ["processing", "failed", "cancelled"],
   processing:         ["paid", "failed"],
   paid:               ["completed", "refunded", "partially_refunded", "disputed"],
-  completed:          ["disputed"],
+  completed:          ["refunded", "disputed"], // remboursement accepté après finalisation
   failed:             [],
   refunded:           [],
   partially_refunded: ["refunded", "disputed"],
