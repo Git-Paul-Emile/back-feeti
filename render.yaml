@@ -9,6 +9,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: ENABLE_ADMIN_SIGNUP
+        value: "true"
       - key: DATABASE_URL
         sync: false
       - key: DIRECT_URL
