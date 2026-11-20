@@ -2,6 +2,7 @@
 import type { Request, Response } from "express";
 import { StatusCodes } from "http-status-codes";
 import { loyaltyService } from "../services/loyalty.service.js";
+import { AppError } from "../utils/AppError.js";
 
 export const loyaltyController = {
 
@@ -176,6 +177,23 @@ export const loyaltyController = {
 
   async getAdminStats(req: Request, res: Response) {
     const data = await loyaltyService.getAdminStats();
+    res.status(StatusCodes.OK).json({ status: "success", data });
+  },
+
+  async getAdminRedemptions(req: Request, res: Response) {
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const status = req.query.status as string | undefined;
+    const data = await loyaltyService.getAdminRedemptions({ page, limit, status });
+    res.status(StatusCodes.OK).json({ status: "success", data });
+  },
+
+  async updateAdminRedemptionStatus(req: Request, res: Response) {
+    const { status } = req.body;
+    if (status !== "confirmed" && status !== "cancelled") {
+      throw new AppError("Statut de récompense invalide", StatusCodes.BAD_REQUEST);
+    }
+    const data = await loyaltyService.updateAdminRedemptionStatus(String(req.params.id), status);
     res.status(StatusCodes.OK).json({ status: "success", data });
   },
 

@@ -78,6 +78,8 @@ router.post(
 // Stats & alertes
 router.get("/admin/stats", ...adminOnly, loyaltyController.getAdminStats);
 router.get("/admin/fraud-alerts", ...adminOnly, loyaltyController.getFraudAlerts);
+router.get("/admin/redemptions", ...adminOnly, loyaltyController.getAdminRedemptions);
+router.patch("/admin/redemptions/:id", ...adminOnly, loyaltyController.updateAdminRedemptionStatus);
 
 // Utilisateurs
 router.get("/admin/users", ...adminOnly, loyaltyController.getAllUsers);

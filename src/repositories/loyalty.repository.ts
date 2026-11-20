@@ -1,5 +1,7 @@
 import { prisma } from "../config/database.js";
 import type { LoyaltyLevel, PointsActionType, Prisma } from "../generated/prisma/client.js";
+import { StatusCodes } from "http-status-codes";
+import { AppError } from "../utils/AppError.js";
 
 // ─── Profil ─────────────────────────────────────────────────────────────────
 
@@ -151,17 +153,139 @@ export const loyaltyRepository = {
     return prisma.loyaltyReward.delete({ where: { id } });
   },
 
-  async createRedemption(profileId: string, rewardId: string, points: number) {
-    return prisma.loyaltyRedemption.create({
-      data: { profileId, rewardId, points, status: "confirmed" },
-      include: { reward: true },
+  async redeemReward(profileId: string, rewardId: string) {
+    return prisma.$transaction(async (tx) => {
+      const reward = await tx.loyaltyReward.findFirst({ where: { id: rewardId, isActive: true } });
+      if (!reward) throw new AppError("Récompense introuvable ou inactive", StatusCodes.NOT_FOUND);
+      if (reward.stock <= 0) throw new AppError("Stock épuisé", StatusCodes.BAD_REQUEST);
+      if (reward.points <= 0) throw new AppError("Cette récompense n'est pas échangeable", StatusCodes.BAD_REQUEST);
+
+      const stockReservation = await tx.loyaltyReward.updateMany({
+        where: { id: rewardId, isActive: true, stock: { gt: 0 } },
+        data: { stock: { decrement: 1 } },
+      });
+      if (stockReservation.count === 0) {
+        throw new AppError("Stock épuisé", StatusCodes.BAD_REQUEST);
+      }
+
+      const pointsDebit = await tx.loyaltyProfile.updateMany({
+        where: { id: profileId, points: { gte: reward.points } },
+        data: { points: { decrement: reward.points }, pointsSpent: { increment: reward.points } },
+      });
+      if (pointsDebit.count === 0) {
+        throw new AppError("Points insuffisants pour cette récompense", StatusCodes.BAD_REQUEST);
+      }
+
+      const profile = await tx.loyaltyProfile.findUniqueOrThrow({ where: { id: profileId } });
+      const level = computeLevel(profile.points);
+      if (profile.level !== level) {
+        await tx.loyaltyProfile.update({ where: { id: profileId }, data: { level } });
+      }
+      await tx.pointsLedger.create({
+        data: {
+          profileId,
+          action: "reward_redemption",
+          points: -reward.points,
+          balanceBefore: profile.points + reward.points,
+          balanceAfter: profile.points,
+          description: `Échange récompense : ${reward.title}`,
+          referenceId: rewardId,
+          referenceType: "reward",
+        },
+      });
+
+      return tx.loyaltyRedemption.create({
+        data: { profileId, rewardId, points: reward.points, status: "pending" },
+        include: { reward: true },
+      });
     });
   },
 
-  async decrementRewardStock(rewardId: string) {
-    return prisma.loyaltyReward.update({
-      where: { id: rewardId },
-      data: { stock: { decrement: 1 } },
+  async getAdminRedemptions(filters: { page?: number; limit?: number; status?: string } = {}) {
+    const page = Math.max(1, filters.page ?? 1);
+    const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
+    const where = filters.status ? { status: filters.status } : {};
+    const [items, total] = await Promise.all([
+      prisma.loyaltyRedemption.findMany({
+        where,
+        include: {
+          reward: true,
+          profile: { include: { user: { select: { id: true, name: true, email: true } } } },
+        },
+        orderBy: { createdAt: "desc" },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.loyaltyRedemption.count({ where }),
+    ]);
+    return { items, total, page, limit, totalPages: Math.ceil(total / limit) };
+  },
+
+  async updateRedemptionStatus(id: string, status: "confirmed" | "cancelled") {
+    return prisma.$transaction(async (tx) => {
+      const current = await tx.loyaltyRedemption.findUnique({ where: { id } });
+      if (!current) return null;
+      if (current.status !== "pending") {
+        return tx.loyaltyRedemption.findUnique({
+          where: { id },
+          include: {
+            reward: true,
+            profile: { include: { user: { select: { id: true, name: true, email: true } } } },
+          },
+        });
+      }
+
+      const transition = await tx.loyaltyRedemption.updateMany({
+        where: { id, status: "pending" },
+        data: { status },
+      });
+      if (transition.count === 0) {
+        return tx.loyaltyRedemption.findUnique({
+          where: { id },
+          include: {
+            reward: true,
+            profile: { include: { user: { select: { id: true, name: true, email: true } } } },
+          },
+        });
+      }
+
+      if (status === "cancelled") {
+        const profile = await tx.loyaltyProfile.findUniqueOrThrow({ where: { id: current.profileId } });
+        const balanceAfter = profile.points + current.points;
+        const level = computeLevel(balanceAfter);
+        await tx.loyaltyProfile.update({
+          where: { id: profile.id },
+          data: {
+            points: { increment: current.points },
+            pointsSpent: { decrement: current.points },
+            level,
+          },
+        });
+        await tx.pointsLedger.create({
+          data: {
+            profileId: profile.id,
+            action: "reward_redemption",
+            points: current.points,
+            balanceBefore: profile.points,
+            balanceAfter,
+            description: "Remboursement après annulation d'une récompense",
+            referenceId: current.id,
+            referenceType: "reward",
+          },
+        });
+        await tx.loyaltyReward.update({
+          where: { id: current.rewardId },
+          data: { stock: { increment: 1 } },
+        });
+      }
+
+      return tx.loyaltyRedemption.findUnique({
+        where: { id },
+        include: {
+          reward: true,
+          profile: { include: { user: { select: { id: true, name: true, email: true } } } },
+        },
+      });
     });
   },
 
@@ -311,6 +435,66 @@ export const loyaltyRepository = {
 
   async updateCommunityPost(id: string, data: any) {
     return prisma.communityPost.update({ where: { id }, data });
+  },
+
+  async moderateCommunityPost(id: string, status: "approved" | "rejected", pointsForApproval: number) {
+    return prisma.$transaction(async (tx) => {
+      const post = await tx.communityPost.findUnique({ where: { id } });
+      if (!post) return null;
+      if (post.status !== "pending") return { post, pointsAwarded: false };
+
+      const transition = await tx.communityPost.updateMany({
+        where: { id, status: "pending" },
+        data: { status },
+      });
+      if (transition.count === 0) {
+        const unchanged = await tx.communityPost.findUnique({ where: { id } });
+        return unchanged ? { post: unchanged, pointsAwarded: false } : null;
+      }
+
+      let pointsAwarded = false;
+      if (status === "approved") {
+        const profile = await tx.loyaltyProfile.findUnique({ where: { userId: post.authorId } });
+        if (!profile) throw new Error("Profil de fidélité introuvable pour cette publication");
+
+        const previousAward = await tx.pointsLedger.findFirst({
+          where: {
+            profileId: profile.id,
+            action: "community_post",
+            referenceId: post.id,
+            referenceType: "post",
+          },
+        });
+        if (!previousAward) {
+          const balanceAfter = profile.points + pointsForApproval;
+          const level = computeLevel(balanceAfter);
+          await tx.loyaltyProfile.update({
+            where: { id: profile.id },
+            data: {
+              points: { increment: pointsForApproval },
+              pointsEarned: { increment: pointsForApproval },
+              level,
+            },
+          });
+          await tx.pointsLedger.create({
+            data: {
+              profileId: profile.id,
+              action: "community_post",
+              points: pointsForApproval,
+              balanceBefore: profile.points,
+              balanceAfter,
+              description: `Publication communautaire approuvée : ${post.title}`,
+              referenceId: post.id,
+              referenceType: "post",
+            },
+          });
+          pointsAwarded = true;
+        }
+      }
+
+      const updatedPost = await tx.communityPost.findUnique({ where: { id } });
+      return updatedPost ? { post: updatedPost, pointsAwarded } : null;
+    });
   },
 
   async deleteCommunityPost(id: string) {
@@ -567,9 +751,9 @@ export const loyaltyRepository = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function computeLevel(points: number): LoyaltyLevel {
-  if (points >= 4000) return "Boboto";
-  if (points >= 3000) return "Mwana";
+  if (points >= 10000) return "Boboto";
+  if (points >= 5000) return "Mwana";
   if (points >= 2000) return "Momi";
-  if (points >= 1000) return "Elengi";
+  if (points >= 500) return "Elengi";
   return "Mobembo";
 }

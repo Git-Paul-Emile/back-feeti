@@ -155,6 +155,7 @@ export const loyaltyService = {
       newUserId,
       "user"
     );
+    await checkAndProgressMissions(referrerProfile.id, "referral_signup");
 
     // Vérifier le badge parrainage
     const { prisma: db2 } = await import("../config/database.js");
@@ -250,7 +251,7 @@ export const loyaltyService = {
 
     const benefits = VIP_BENEFITS[level] ?? VIP_BENEFITS["Mobembo"];
     const nextLevelName = { Mobembo: "Elengi", Elengi: "Momi", Momi: "Mwana", Mwana: "Boboto", Boboto: null }[level];
-    const thresholds: Record<string, number> = { Mobembo: 0, Elengi: 1000, Momi: 2000, Mwana: 3000, Boboto: 4000 };
+    const thresholds: Record<string, number> = { Mobembo: 0, Elengi: 500, Momi: 2000, Mwana: 5000, Boboto: 10000 };
     const nextThreshold = nextLevelName ? thresholds[nextLevelName] : null;
     const pointsToNext = nextThreshold ? Math.max(0, nextThreshold - profile.points) : 0;
 
@@ -305,26 +306,7 @@ export const loyaltyService = {
 
   async redeemReward(userId: string, rewardId: string) {
     const profile = await loyaltyRepository.getOrCreateProfile(userId);
-    const reward = await loyaltyRepository.getRewardById(rewardId);
-
-    if (!reward) throw new AppError("Récompense introuvable", StatusCodes.NOT_FOUND);
-    if (!reward.isActive) throw new AppError("Cette récompense n'est plus disponible", StatusCodes.BAD_REQUEST);
-    if (reward.stock <= 0) throw new AppError("Stock épuisé", StatusCodes.BAD_REQUEST);
-    if (profile.points < reward.points) {
-      throw new AppError(`Points insuffisants (${profile.points}/${reward.points})`, StatusCodes.BAD_REQUEST);
-    }
-
-    await loyaltyRepository.decrementRewardStock(rewardId);
-    await loyaltyRepository.updatePoints(
-      profile.id,
-      -reward.points,
-      "reward_redemption",
-      `Échange récompense : ${reward.title}`,
-      rewardId,
-      "reward"
-    );
-    const redemption = await loyaltyRepository.createRedemption(profile.id, rewardId, reward.points);
-    return redemption;
+    return loyaltyRepository.redeemReward(profile.id, rewardId);
   },
 
   // ─── Missions ───────────────────────────────────────────────────────────────
@@ -448,21 +430,8 @@ export const loyaltyService = {
   },
 
   async createCommunityPost(userId: string, data: { title: string; content: string; image?: string; eventId?: string }) {
-    const post = await loyaltyRepository.createCommunityPost({ authorId: userId, ...data });
-
-    const profile = await loyaltyRepository.getOrCreateProfile(userId);
-    await loyaltyRepository.updatePoints(
-      profile.id,
-      POINTS_COMMUNITY_POST,
-      "community_post",
-      `Publication communauté : ${data.title}`,
-      post.id,
-      "post"
-    );
-    await checkAndProgressMissions(profile.id, "community_post");
-    await checkContentCreatorBadge(userId);
-
-    return post;
+    await loyaltyRepository.getOrCreateProfile(userId);
+    return loyaltyRepository.createCommunityPost({ authorId: userId, ...data });
   },
 
   async engageCommunityPost(userId: string, postId: string, type: "like" | "comment", content?: string) {
@@ -489,7 +458,16 @@ export const loyaltyService = {
   },
 
   async moderateCommunityPost(postId: string, status: "approved" | "rejected") {
-    return loyaltyRepository.updateCommunityPost(postId, { status });
+    const result = await loyaltyRepository.moderateCommunityPost(postId, status, POINTS_COMMUNITY_POST);
+    if (!result) throw new AppError("Publication introuvable", StatusCodes.NOT_FOUND);
+
+    if (result.pointsAwarded) {
+      const profile = await loyaltyRepository.getOrCreateProfile(result.post.authorId);
+      await checkAndProgressMissions(profile.id, "community_post");
+      await checkContentCreatorBadge(result.post.authorId);
+    }
+
+    return result.post;
   },
 
   // ─── Badges ambassadeur ────────────────────────────────────────────────────
@@ -544,6 +522,19 @@ export const loyaltyService = {
 
   async getAdminStats() {
     return loyaltyRepository.getAdminStats();
+  },
+
+  async getAdminRedemptions(filters: { page?: number; limit?: number; status?: string } = {}) {
+    return loyaltyRepository.getAdminRedemptions(filters);
+  },
+
+  async updateAdminRedemptionStatus(id: string, status: "confirmed" | "cancelled") {
+    const redemption = await loyaltyRepository.updateRedemptionStatus(id, status);
+    if (!redemption) throw new AppError("Demande de récompense introuvable", StatusCodes.NOT_FOUND);
+    if (redemption.status !== status) {
+      throw new AppError("Cette demande a déjà été traitée", StatusCodes.CONFLICT);
+    }
+    return redemption;
   },
 
   async getFraudAlerts() {
@@ -761,7 +752,7 @@ async function checkReferralBadge(userId: string, referralCount: number) {
 
 async function checkContentCreatorBadge(userId: string) {
   const { prisma } = await import("../config/database.js");
-  const postCount = await prisma.communityPost.count({ where: { authorId: userId } });
+  const postCount = await prisma.communityPost.count({ where: { authorId: userId, status: "approved" } });
   const thresholds = [
     { count: 1,  type: "first_post",        title: "Première publication",  desc: "Vous avez publié votre premier contenu" },
     { count: 5,  type: "content_creator",   title: "Créateur de contenu",   desc: "5 publications dans la communauté" },
