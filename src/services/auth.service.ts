@@ -15,6 +15,12 @@ function omitPassword<T extends { passwordHash?: string }>(user: T) {
   return rest;
 }
 
+function assertAdminSignupEnabled(role: Role | undefined) {
+  if (role === "admin" && process.env.ENABLE_ADMIN_SIGNUP !== "true") {
+    throw new AppError("L'inscription administrateur est désactivée", StatusCodes.FORBIDDEN);
+  }
+}
+
 /** Normalise un numéro de téléphone au format E.164 si possible. */
 function formatPhone(phone: string): string | undefined {
   const cleaned = phone.replace(/\s+/g, "").replace(/^00/, "+");
@@ -47,6 +53,7 @@ async function enqueueWelcomeEmail(user: { role: Role; email: string; name: stri
 
 export const authService = {
   async register(data: RegisterInput) {
+    assertAdminSignupEnabled(data.role);
     const existing = await authRepository.findByEmail(data.email);
     if (existing) {
       throw new AppError("Un compte avec cet email existe déjà", StatusCodes.CONFLICT);
@@ -209,6 +216,7 @@ export const authService = {
 
   // ── Firebase Auth ─────────────────────────────────────────────────────────
   async registerWithFirebase(idToken: string, profileData: Partial<RegisterInput>) {
+    assertAdminSignupEnabled(profileData.role);
     // Vérifier le token Firebase
     const decodedToken = await fbAuth.verifyIdToken(idToken);
     const firebaseUid = decodedToken.uid;
@@ -245,6 +253,9 @@ export const authService = {
       logger.info(`[auth] inscription Firebase OK — rôle: ${user.role}, email: ${user.email}`);
       void enqueueWelcomeEmail(user); // email en arrière-plan : la réponse n'attend pas
     } else {
+      if (profileData.role === "admin" && user.role !== "admin") {
+        throw new AppError("Le rôle administrateur ne peut être attribué qu'à un nouveau compte", StatusCodes.FORBIDDEN);
+      }
       const updates: {
         firebaseUid?: string;
         role?: Role;
