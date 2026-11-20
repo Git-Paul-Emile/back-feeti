@@ -16,7 +16,7 @@ function omitPassword<T extends { passwordHash?: string }>(user: T) {
 }
 
 function assertAdminSignupEnabled(role: Role | undefined) {
-  if (role === "admin" && process.env.ENABLE_ADMIN_SIGNUP !== "true") {
+  if (role === "admin" && process.env.ENABLE_ADMIN_SIGNUP === "false") {
     throw new AppError("L'inscription administrateur est désactivée", StatusCodes.FORBIDDEN);
   }
 }
